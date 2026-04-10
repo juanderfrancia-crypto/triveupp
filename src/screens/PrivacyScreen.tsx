@@ -384,7 +384,7 @@ export default function PrivacyScreen() {
                   Esta acción no se puede deshacer
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.error} />
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   dangerCard: {
-    backgroundColor: COLORS.error + '08',
+    backgroundColor: COLORS.surface,
   },
   cardHeader: {
     flexDirection: 'row',

@@ -19,6 +19,7 @@ import DriverOnboardingScreen from '../screens/DriverOnboardingScreen'
 import SessionHistoryScreen from '../screens/SessionHistoryScreen'
 import RecoveryAccountScreen from '../screens/RecoveryAccountScreen'
 import RecentActivityScreen from '../screens/RecentActivityScreen'
+import ChangePasswordScreen from '../screens/ChangePasswordScreen'
 import PrivacyScreen from '../screens/PrivacyScreen'
 import LoadingScreen from '../screens/LoadingScreen'
 import OnboardingScreen from '../screens/OnboardingScreen'
@@ -99,6 +100,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
             <Stack.Screen name="Security" component={SecurityScreen} />
             <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="RecoveryAccount" component={RecoveryAccountScreen} />
             <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
             <Stack.Screen name="ScheduledTrips" component={ScheduledTripsScreen} />

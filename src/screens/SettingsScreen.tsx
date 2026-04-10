@@ -174,7 +174,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity 
           style={styles.settingCard}
-          onPress={() => Alert.alert('Cambiar Contraseña', 'Serás redirigido a verificar tu identidad')}
+          onPress={() => navigation.navigate('ChangePassword' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>

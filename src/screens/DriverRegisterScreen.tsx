@@ -162,6 +162,7 @@ export default function DriverRegisterScreen() {
         vehicle_year: vehicleData.vehicle_year,
         vehicle_plate: vehicleData.vehicle_plate,
         vehicle_color: vehicleData.vehicle_color,
+        vehicle_type: vehicleTypeId,
         status: 'scheduled',
       }
 

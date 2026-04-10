@@ -44,11 +44,7 @@ export default function SecurityScreen() {
   }, [])
 
   const handleChangePassword = () => {
-    Alert.alert(
-      'Cambiar Contraseña',
-      'Esta función estará disponible próximamente. Por ahora, puedes cambiar tu contraseña desde la página web.',
-      [{ text: 'OK' }]
-    )
+    navigation.navigate('ChangePassword' as never)
   }
 
   const handle2FA = () => {

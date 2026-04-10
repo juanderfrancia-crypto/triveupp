@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useRoutes, Route } from '../hooks/useRoutes'
@@ -19,16 +19,26 @@ import { useAppStore } from '../store/useAppStore'
 
 export default function SearchScreen() {
   const navigation = useNavigation()
+  const route = useRoute()
   const { routes, loading, error, fetchRoutes } = useRoutes()
   const { setSelectedRoute } = useAppStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'available'>('all')
+  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>('all')
   const [displayRoutes, setDisplayRoutes] = useState<Route[]>([])
 
   // Cargar rutas al montar el componente
   useEffect(() => {
+    const selectedType =
+      route.params && typeof route.params === 'object' && 'transportType' in route.params
+        ? (route.params.transportType as 'auto' | 'taxi' | 'busetica' | 'buseta')
+        : 'all'
+    setTransportType(selectedType)
+  }, [route.params])
+
+  useEffect(() => {
     loadRoutes()
-  }, [])
+  }, [transportType])
 
   // Actualizar rutas filtradas cuando cambian los datos
   useEffect(() => {
@@ -37,7 +47,7 @@ export default function SearchScreen() {
 
   const loadRoutes = async () => {
     try {
-      await fetchRoutes()
+      await fetchRoutes(undefined, undefined, transportType)
     } catch (err) {
       Alert.alert('Error', 'No se pudieron cargar las rutas')
     }
@@ -49,7 +59,9 @@ export default function SearchScreen() {
         route.origin.toLowerCase().includes(search.toLowerCase()) ||
         route.destination.toLowerCase().includes(search.toLowerCase())
       const matchFilter = filter === 'all' || route.available_seats > 0
-      return matchSearch && matchFilter
+      const matchVehicleType =
+        transportType === 'all' || route.vehicle_type === transportType
+      return matchSearch && matchFilter && matchVehicleType
     })
     setDisplayRoutes(filtered)
   }

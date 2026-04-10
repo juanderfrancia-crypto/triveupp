@@ -24,7 +24,7 @@ const getGreeting = () => {
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>()
-  const [transportType, setTransportType] = useState<'car' | 'taxi' | 'bus' | 'bike'>('car')
+  const [transportType, setTransportType] = useState<'auto' | 'taxi' | 'busetica' | 'buseta'>('auto')
   const [destination, setDestination] = useState('')
   const balance = useAppStore((state) => state.balance)
   const setBalance = useAppStore((state) => state.setBalance)
@@ -152,7 +152,12 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.searchBtn, !destination && styles.searchBtnDisabled]}
             disabled={!destination}
-            onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}
+            onPress={() =>
+              navigation.navigate(
+                'Main' as never,
+                { screen: 'Search', params: { transportType } } as never,
+              )
+            }
             activeOpacity={0.85}
           >
             <Ionicons name="search" size={20} color={destination ? COLORS.textInverse : COLORS.textSecondary} />
@@ -166,19 +171,19 @@ export default function HomeScreen() {
         <View style={styles.transportSection}>
           <Text style={styles.sectionTitle}>Tipo de transporte</Text>
           <View style={styles.transportRow}>
-            {(['car', 'taxi', 'bus', 'bike'] as const).map((type) => {
+            {(['auto', 'taxi', 'busetica', 'buseta'] as const).map((type) => {
               const isActive = transportType === type
               const icons: Record<string, string> = {
-                car: 'car',
+                auto: 'car',
                 taxi: 'car-outline',
-                bus: 'bus',
-                bike: 'bicycle-outline',
+                busetica: 'bus-outline',
+                buseta: 'bus',
               }
               const labels: Record<string, string> = {
-                car: 'Auto',
+                auto: 'Auto',
                 taxi: 'Taxi',
-                bus: 'Bus',
-                bike: 'Moto',
+                busetica: 'Busetica',
+                buseta: 'Buseta',
               }
 
               return (
@@ -247,126 +252,21 @@ export default function HomeScreen() {
         <View style={styles.routesSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Rutas disponibles</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate(
+                  'Main' as never,
+                  { screen: 'Search', params: { transportType } } as never,
+                )
+              }
+            >
               <Text style={styles.seeAllText}>Ver todas</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Route Card 1 - Gradient Style */}
-          <TouchableOpacity
-            style={styles.homeRouteCardWrapper}
-            onPress={() => navigation.navigate('SeatSelection' as never)}
-            activeOpacity={0.75}
-          >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primary + 'CC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.homeRouteCardGradient}
-            >
-              <View style={styles.homeRouteTop}>
-                <View style={styles.homeRouteRouteContainer}>
-                  <View style={styles.homeRouteDotOrigin} />
-                  <Text style={styles.homeRouteText} numberOfLines={1}>
-                    Puerto Tejada → Cali
-                  </Text>
-                </View>
-                <View style={styles.homeRoutePriceBox}>
-                  <Text style={styles.homeRoutePrice}>$5.500</Text>
-                </View>
-              </View>
-
-              <View style={styles.homeRouteMiddle}>
-                <View style={styles.homeRouteDetailItem}>
-                  <Ionicons name="time-outline" size={14} color="#fff" />
-                  <Text style={styles.homeRouteDetailText}>45 min</Text>
-                </View>
-                <View style={styles.homeRouteDetailItem}>
-                  <Ionicons name="calendar-outline" size={14} color="#fff" />
-                  <Text style={styles.homeRouteDetailText}>Hoy · 2:30 PM</Text>
-                </View>
-              </View>
-
-              <View style={styles.homeRouteDivider} />
-
-              <View style={styles.homeRouteBottom}>
-                <View style={styles.homeRouteDriver}>
-                  <View style={styles.homeDriverAvatar}>
-                    <Text style={styles.homeDriverInitials}>JR</Text>
-                  </View>
-                  <View style={styles.homeDriverDetails}>
-                    <Text style={styles.homeDriverName} numberOfLines={1}>Juan R.</Text>
-                    <View style={styles.homeRatingBadge}>
-                      <Ionicons name="star" size={10} color={COLORS.accent} />
-                      <Text style={styles.homeRatingText}>4.8</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.homeSeatsAvailable}>
-                  <Ionicons name="people-outline" size={14} color="#fff" />
-                  <Text style={styles.homeSeatsText}>3 libres</Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Route Card 2 - Gradient Style */}
-          <TouchableOpacity
-            style={styles.homeRouteCardWrapper}
-            onPress={() => navigation.navigate('SeatSelection' as never)}
-            activeOpacity={0.75}
-          >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primary + 'CC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.homeRouteCardGradient}
-            >
-              <View style={styles.homeRouteTop}>
-                <View style={styles.homeRouteRouteContainer}>
-                  <View style={styles.homeRouteDotOrigin} />
-                  <Text style={styles.homeRouteText} numberOfLines={1}>
-                    Jamundí → Cali
-                  </Text>
-                </View>
-                <View style={styles.homeRoutePriceBox}>
-                  <Text style={styles.homeRoutePrice}>$4.200</Text>
-                </View>
-              </View>
-
-              <View style={styles.homeRouteMiddle}>
-                <View style={styles.homeRouteDetailItem}>
-                  <Ionicons name="time-outline" size={14} color="#fff" />
-                  <Text style={styles.homeRouteDetailText}>35 min</Text>
-                </View>
-                <View style={styles.homeRouteDetailItem}>
-                  <Ionicons name="calendar-outline" size={14} color="#fff" />
-                  <Text style={styles.homeRouteDetailText}>Hoy · 3:00 PM</Text>
-                </View>
-              </View>
-
-              <View style={styles.homeRouteDivider} />
-
-              <View style={styles.homeRouteBottom}>
-                <View style={styles.homeRouteDriver}>
-                  <View style={styles.homeDriverAvatar}>
-                    <Text style={styles.homeDriverInitials}>MC</Text>
-                  </View>
-                  <View style={styles.homeDriverDetails}>
-                    <Text style={styles.homeDriverName} numberOfLines={1}>María C.</Text>
-                    <View style={styles.homeRatingBadge}>
-                      <Ionicons name="star" size={10} color={COLORS.accent} />
-                      <Text style={styles.homeRatingText}>4.9</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.homeSeatsAvailable}>
-                  <Ionicons name="people-outline" size={14} color="#fff" />
-                  <Text style={styles.homeSeatsText}>2 libres</Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.emptySection}>
+            <Text style={styles.emptySectionTitle}>No hay rutas disponibles</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -777,6 +677,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  emptySection: {
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  emptySectionTitle: {
+    ...TYPOGRAPHY.h4,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  emptySectionText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
 
   // Route Card

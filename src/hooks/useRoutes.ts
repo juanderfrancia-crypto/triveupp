@@ -17,6 +17,7 @@ export interface Route {
   vehicle_year: number;
   vehicle_plate: string;
   vehicle_color: string;
+  vehicle_type?: 'auto' | 'taxi' | 'busetica' | 'buseta';
   description?: string;
   status: string;
   created_at: string;
@@ -31,7 +32,11 @@ export const useRoutes = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRoutes = async (origin?: string, destination?: string) => {
+  const fetchRoutes = async (
+    origin?: string,
+    destination?: string,
+    vehicleType?: 'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'
+  ) => {
     try {
       setError(null);
       setLoading(true);
@@ -41,6 +46,10 @@ export const useRoutes = () => {
         .select("*")
         .eq("status", "scheduled")
         .gt("available_seats", 0);
+
+      if (vehicleType && vehicleType !== 'all') {
+        query = query.eq('vehicle_type', vehicleType);
+      }
 
       if (origin) {
         query = query.ilike("origin", `%${origin}%`);
