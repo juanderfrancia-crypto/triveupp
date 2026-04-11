@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS routes (
   vehicle_year INT,
   vehicle_plate VARCHAR(20),
   vehicle_color VARCHAR(50),
+  vehicle_type VARCHAR(50),
   description TEXT,
   status VARCHAR(20) DEFAULT 'scheduled', -- 'scheduled', 'in_progress', 'completed', 'cancelled'
   created_at TIMESTAMP DEFAULT NOW(),
@@ -51,8 +52,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   booking_status VARCHAR(20) DEFAULT 'confirmed', -- 'confirmed', 'cancelled'
   notes TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(route_id, seat_number)
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 4. DRIVERS TABLE (Driver Information)
@@ -85,8 +85,10 @@ CREATE TABLE IF NOT EXISTS reviews (
 CREATE INDEX IF NOT EXISTS idx_routes_driver_id ON routes(driver_id);
 CREATE INDEX IF NOT EXISTS idx_routes_departure_time ON routes(departure_time);
 CREATE INDEX IF NOT EXISTS idx_routes_origin_destination ON routes(origin, destination);
+CREATE INDEX IF NOT EXISTS idx_routes_vehicle_type ON routes(vehicle_type);
 CREATE INDEX IF NOT EXISTS idx_bookings_route_id ON bookings(route_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_passenger_id ON bookings(passenger_id);
+CREATE UNIQUE INDEX IF NOT EXISTS unique_route_seat_confirmed ON bookings(route_id, seat_number) WHERE booking_status != 'cancelled';
 CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
 
 -- Enable RLS (Row Level Security) for security
@@ -128,6 +130,17 @@ CREATE POLICY "Drivers can view bookings for their routes" ON bookings
   FOR SELECT USING (
     auth.uid() IN (
       SELECT driver_id FROM routes WHERE routes.id = bookings.route_id
+    )
+  );
+
+CREATE POLICY "Users can view bookings for available routes" ON bookings
+  FOR SELECT USING (
+    passenger_id::text = auth.uid() OR
+    auth.uid() = (
+      SELECT driver_id::text FROM routes WHERE routes.id = bookings.route_id
+    ) OR
+    EXISTS (
+      SELECT 1 FROM routes WHERE routes.id = bookings.route_id AND routes.status = 'scheduled'
     )
   );
 

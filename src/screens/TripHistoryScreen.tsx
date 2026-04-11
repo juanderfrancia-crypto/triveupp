@@ -7,7 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
 import RatingModal from '../components/RatingModal'
-import { createReview } from '../services/reviews'
+import { createReview, hasUserRated } from '../services/reviews'
 import Toast from '../components/Toast'
 
 export default function TripHistoryScreen() {
@@ -47,9 +47,23 @@ export default function TripHistoryScreen() {
           status: booking.booking_status || 'confirmed',
           rating: route.driver_rating || null,
           driver: route.driver_name || 'Conductor',
+          driver_id: route.driver_id || null,
+          hasRated: false,
         }
       })
-      setTripHistory(formatted)
+
+      const enriched = await Promise.all(
+        formatted.map(async (trip) => {
+          if (!trip.driver_id || trip.status !== 'completed') return trip
+          const alreadyRated = await hasUserRated(trip.id, user!.id, trip.driver_id)
+          return {
+            ...trip,
+            hasRated: alreadyRated,
+          }
+        })
+      )
+
+      setTripHistory(enriched)
     } catch (err) {
       console.error('Error loading trip history:', err)
       setTripHistory([])
@@ -72,19 +86,78 @@ export default function TripHistoryScreen() {
     })
   }
 
-  const handleRateTrip = (trip: any) => {
+  const handleRateTrip = async (trip: any) => {
+    if (!user) return
+    if (trip.hasRated) {
+      setToastConfig({
+        visible: true,
+        message: 'Ya has calificado este viaje.',
+        type: 'info',
+      })
+      return
+    }
+
+    if (!trip.driver_id) {
+      setToastConfig({
+        visible: true,
+        message: 'No se encontró el conductor del viaje para calificar.',
+        type: 'error',
+      })
+      return
+    }
+
+    const alreadyRated = await hasUserRated(trip.id, user.id, trip.driver_id)
+    if (alreadyRated) {
+      setTripHistory((prev) =>
+        prev.map((item) =>
+          item.id === trip.id ? { ...item, hasRated: true } : item
+        )
+      )
+      setToastConfig({
+        visible: true,
+        message: 'Ya has calificado este viaje.',
+        type: 'info',
+      })
+      return
+    }
+
     setSelectedTrip(trip)
     setRatingModalVisible(true)
   }
 
   const handleRatingSubmit = async (rating: number, comment: string) => {
     if (!selectedTrip || !user) return
+    if (!selectedTrip.driver_id) {
+      setToastConfig({
+        visible: true,
+        message: 'No se encontró el conductor del viaje para calificar.',
+        type: 'error',
+      })
+      return
+    }
 
     try {
+      const alreadyRated = await hasUserRated(selectedTrip.id, user.id, selectedTrip.driver_id)
+      if (alreadyRated) {
+        setTripHistory((prev) =>
+          prev.map((item) =>
+            item.id === selectedTrip.id ? { ...item, hasRated: true } : item
+          )
+        )
+        setToastConfig({
+          visible: true,
+          message: 'Ya has calificado este viaje.',
+          type: 'info',
+        })
+        setRatingModalVisible(false)
+        setSelectedTrip(null)
+        return
+      }
+
       const success = await createReview(
         selectedTrip.id,
         user.id,
-        selectedTrip.driver_id || user.id, // fallback to user.id if driver_id not available
+        selectedTrip.driver_id,
         rating,
         comment || undefined
       )
@@ -230,14 +303,16 @@ export default function TripHistoryScreen() {
                     <View style={styles.driverInfo}>
                       <Ionicons name="person" size={16} color={COLORS.textSecondary} />
                       <Text style={styles.driverText}>Conductor: {trip.driver}</Text>
-                      {trip.rating && (
+                      {(trip.rating || trip.hasRated) && (
                         <View style={styles.ratingBadge}>
                           <Ionicons name="star" size={12} color={COLORS.warning} />
-                          <Text style={styles.ratingText}>{trip.rating}</Text>
+                          <Text style={styles.ratingText}>
+                            {trip.rating ? trip.rating : 'Calificado'}
+                          </Text>
                         </View>
                       )}
                     </View>
-                    {!trip.rating && (
+                    {!trip.rating && !trip.hasRated && (
                       <TouchableOpacity
                         style={styles.rateBtn}
                         onPress={() => handleRateTrip(trip)}

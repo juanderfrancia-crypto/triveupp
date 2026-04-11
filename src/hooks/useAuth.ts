@@ -88,9 +88,25 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      restoreSession(session);
-    });
+    const initializeSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting auth session:', error);
+          setError('Error de red al restaurar la sesión');
+          setLoading(false);
+          return;
+        }
+
+        restoreSession(data.session);
+      } catch (err: any) {
+        console.error('Error getting auth session:', err);
+        setError('Error de red al restaurar la sesión');
+        setLoading(false);
+      }
+    };
+
+    initializeSession();
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       restoreSession(session);

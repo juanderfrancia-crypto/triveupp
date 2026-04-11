@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -19,13 +19,25 @@ import Toast from '../components/Toast'
 
 export default function BookingScreen() {
   const navigation = useNavigation<any>()
-  const { selectedRoute, bookingData, user, authUser } = useAppStore()
-  const { createBooking, loading } = useBookings()
+  const { selectedRoute, bookingData, user, authUser, setBookingData } = useAppStore()
+  const { createBooking, finalizePendingBookings, releasePendingBookings, loading } = useBookings()
   const { createNotification } = useNotifications(authUser?.id)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
+  const [pendingBookingIds, setPendingBookingIds] = useState<string[]>(bookingData?.pending_booking_ids ?? [])
+  const [bookingFinalized, setBookingFinalized] = useState(false)
   const [toastVisible, setToastVisible] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success')
+
+  useEffect(() => {
+    return () => {
+      if (!bookingFinalized && pendingBookingIds.length > 0 && selectedRoute) {
+        releasePendingBookings(pendingBookingIds, selectedRoute.id).catch((error) => {
+          console.warn('Error releasing pending bookings on unmount:', error)
+        })
+      }
+    }
+  }, [bookingFinalized, pendingBookingIds, releasePendingBookings, selectedRoute])
 
   if (!selectedRoute || !user || !authUser || !bookingData || !bookingData.seat_numbers?.length) {
     return (
@@ -65,22 +77,39 @@ export default function BookingScreen() {
   const finalTotal = total_price + serviceFee
 
   const handleConfirmBooking = async () => {
-    try {
-      // Crear una reserva por cada asiento seleccionado
-      const bookingPromises = seat_numbers.map((seatNum: number) =>
-        createBooking(
-          selectedRoute.id,
-          authUser.id,
-          seatNum,
-          selectedRoute.price_per_seat,
-          paymentMethod
-        )
-      )
+    if (!authUser) {
+      setToastMessage('Debes iniciar sesión para confirmar la reserva')
+      setToastType('error')
+      setToastVisible(true)
+      return
+    }
 
-      const results = await Promise.all(bookingPromises)
-      const allSuccessful = results.every((r) => r !== null)
+    try {
+      let results
+
+      if (pendingBookingIds.length > 0) {
+        results = await finalizePendingBookings(pendingBookingIds, paymentMethod)
+      } else {
+        const bookingPromises = seat_numbers.map((seatNum: number) =>
+          createBooking(
+            selectedRoute.id,
+            authUser.id,
+            seatNum,
+            selectedRoute.price_per_seat,
+            paymentMethod
+          )
+        )
+        results = await Promise.all(bookingPromises)
+      }
+
+      const allSuccessful = Array.isArray(results)
+        ? results.every((r) => r !== null)
+        : !!results
 
       if (allSuccessful) {
+        setBookingFinalized(true)
+        setPendingBookingIds([])
+
         // Crear notificación
         try {
           await createNotification(authUser.id, {
@@ -90,7 +119,7 @@ export default function BookingScreen() {
             message: `Tu reserva para ${selectedRoute.origin} → ${selectedRoute.destination} está confirmada. Asientos: ${seat_numbers.join(', ')}`,
             data: {
               route_id: selectedRoute.id,
-              booking_id: results[0]?.id,
+              booking_id: Array.isArray(results) ? results[0]?.id : undefined,
               seat_numbers: seat_numbers,
               departure_time: selectedRoute.departure_time,
             },
@@ -103,14 +132,13 @@ export default function BookingScreen() {
         setToastMessage(`Reserva confirmada. Asientos: ${seat_numbers.join(', ')}`)
         setToastType('success')
         setToastVisible(true)
-        setTimeout(() => navigation.navigate('TripStatus' as never), 1500)
+        navigation.navigate('TripStatus' as never)
       } else {
         setToastMessage('Some bookings failed. Please contact support.')
         setToastType('error')
         setToastVisible(true)
       }
     } catch (error: any) {
-      // Manejar error específico de asiento ya reservado
       if (error.code === 'SEAT_ALREADY_RESERVED') {
         setToastMessage('Uno de los asientos seleccionados ya fue reservado. Por favor vuelve a seleccionar.')
         setToastType('error')
@@ -146,10 +174,10 @@ export default function BookingScreen() {
           style={styles.tripCardGradient}
         >
           <View style={styles.routeRow}>
-            <View style={styles.routePoint}>
+            <View style={[styles.routePoint, styles.routePointColumn]}>
               <View style={[styles.routeDotStart, { backgroundColor: COLORS.accent }]} />
               <Text style={styles.routeLabel}>Desde</Text>
-              <Text style={[styles.routeText, { color: '#fff' }]}>{selectedRoute.origin}</Text>
+              <Text style={[styles.routeText, styles.routeTextWhite]} numberOfLines={2}>{selectedRoute.origin}</Text>
             </View>
             <View style={styles.routeLineContainer}>
               <View style={styles.routeLine} />
@@ -157,10 +185,10 @@ export default function BookingScreen() {
                 <Ionicons name="car-outline" size={20} color="#fff" />
               </View>
             </View>
-            <View style={styles.routePoint}>
+            <View style={[styles.routePoint, styles.routePointColumn]}>
               <View style={[styles.routeDotEnd, { backgroundColor: '#10B981' }]} />
               <Text style={styles.routeLabel}>Hacia</Text>
-              <Text style={[styles.routeText, { color: '#fff' }]}>{selectedRoute.destination}</Text>
+              <Text style={[styles.routeText, styles.routeTextWhite]} numberOfLines={2}>{selectedRoute.destination}</Text>
             </View>
           </View>
 
@@ -410,10 +438,16 @@ const styles = StyleSheet.create({
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: SPACING.md,
   },
   routePoint: {
     alignItems: 'center',
+  },
+  routePointColumn: {
+    flex: 0,
+    minWidth: 110,
+    maxWidth: 120,
   },
   routeDotStart: {
     width: 12,
@@ -431,13 +465,19 @@ const styles = StyleSheet.create({
   },
   routeLabel: {
     ...TYPOGRAPHY.label,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
     marginBottom: 2,
+    textTransform: 'uppercase',
   },
   routeText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  routeTextWhite: {
+    color: '#fff',
   },
   routeLine: {
     position: 'absolute',

@@ -177,7 +177,7 @@ export default function DriverPanelScreen() {
       return
     }
 
-    navigation.navigate('CreateRoute' as never)
+    navigation.navigate('DriverRegister' as never)
   }
 
   const getSeatsFilled = (route: DriverRoute) => {

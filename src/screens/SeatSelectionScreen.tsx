@@ -1,20 +1,66 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
+import { useRoutes } from '../hooks/useRoutes'
 
 export default function SeatSelectionScreen() {
   const navigation = useNavigation()
-  const { selectedRoute, setBookingData } = useAppStore()
-  const { getRouteBookings, loading } = useBookings()
+  const { selectedRoute, setBookingData, authUser, user } = useAppStore()
+  const { getRouteBookings, reservePendingBookings, loading } = useBookings()
+  const { getRouteById } = useRoutes()
   const [bookings, setBookings] = useState<any[]>([])
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [initialLoading, setInitialLoading] = useState(true)
+
+  const loadBookings = useCallback(async () => {
+    if (!selectedRoute?.id) return
+    if (!authUser) {
+      Alert.alert('Inicia sesión', 'Debes iniciar sesión para ver los asientos ocupados.', [
+        { text: 'Aceptar', onPress: () => navigation.navigate('Login' as never) }
+      ])
+      return
+    }
+
+    try {
+      setInitialLoading(true)
+
+      const currentRoute = await getRouteById(selectedRoute.id)
+      if (!currentRoute) {
+        Alert.alert('Error', 'Esta ruta ya no está disponible.')
+        return
+      }
+
+      if (currentRoute.status !== 'scheduled') {
+        Alert.alert(
+          'Ruta no disponible',
+          'Esta ruta ya no está en estado programado. Por favor selecciona otra ruta.'
+        )
+        return
+      }
+
+      const routeBookings = await getRouteBookings(selectedRoute.id, true)
+      const normalizedBookings = routeBookings.map((booking: any) => ({
+        ...booking,
+        seat_number: Number(booking.seat_number),
+      }))
+      setBookings(normalizedBookings)
+      console.log('SeatSelection loaded bookings:', selectedRoute.id, normalizedBookings.map((b) => b.seat_number))
+    } catch (error: any) {
+      console.error('Error loading bookings:', error)
+      Alert.alert(
+        'No se pudieron cargar los asientos',
+        error?.message || 'Revisa tu conexión o permisos de base de datos.'
+      )
+    } finally {
+      setInitialLoading(false)
+    }
+  }, [getRouteBookings, getRouteById, selectedRoute?.id, authUser])
 
   useEffect(() => {
     if (!selectedRoute) {
@@ -23,20 +69,26 @@ export default function SeatSelectionScreen() {
       ])
       return
     }
-    loadBookings()
-  }, [selectedRoute?.id])
 
-  const loadBookings = async () => {
-    try {
-      setInitialLoading(true)
-      const routeBookings = await getRouteBookings(selectedRoute!.id)
-      setBookings(routeBookings)
-    } catch (error) {
-      console.error('Error loading bookings:', error)
-    } finally {
-      setInitialLoading(false)
+    if (!authUser) {
+      Alert.alert('Inicia sesión', 'Debes iniciar sesión para ver los asientos ocupados.', [
+        { text: 'Aceptar', onPress: () => navigation.navigate('Login' as never) }
+      ])
+      return
     }
-  }
+
+    setSelectedSeats([])
+    loadBookings()
+  }, [selectedRoute?.id, loadBookings, authUser])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedRoute?.id || !authUser) return
+
+      loadBookings()
+      return () => {}
+    }, [loadBookings, selectedRoute?.id, authUser])
+  )
 
   if (!selectedRoute) {
     return (
@@ -48,7 +100,7 @@ export default function SeatSelectionScreen() {
     )
   }
 
-  const occupiedSeats = new Set(bookings.map((b: any) => b.seat_number))
+  const occupiedSeats = new Set(bookings.map((b: any) => Number(b.seat_number)))
   const totalSeats = selectedRoute.total_seats || 5
   const availableSeatsCount = totalSeats - occupiedSeats.size
 
@@ -71,29 +123,89 @@ export default function SeatSelectionScreen() {
     })
   }
 
-  const handleContinue = () => {
+  const handleSeatPress = (seatId: number, available: boolean) => {
+    if (!available) {
+      Alert.alert('Asiento ocupado', 'Este asiento ya está reservado. Por favor elige otro.')
+      return
+    }
+    toggleSeat(seatId)
+  }
+
+  const handleContinue = async () => {
     if (selectedSeats.length === 0) {
       Alert.alert('Error', 'Selecciona al menos un asiento')
       return
     }
 
-    const totalPrice = selectedSeats.length * selectedRoute.price_per_seat
+    if (!selectedRoute) return
+    if (!authUser || !user) {
+      Alert.alert('Error', 'Debes iniciar sesión correctamente para reservar')
+      return
+    }
 
-    setBookingData({
-      route_id: selectedRoute.id,
-      seat_numbers: selectedSeats,
-      total_seats: selectedSeats.length,
-      price_per_seat: selectedRoute.price_per_seat,
-      total_price: totalPrice,
-      origin: selectedRoute.origin,
-      destination: selectedRoute.destination,
-      departure_time: selectedRoute.departure_time,
-      driver_name: selectedRoute.driver_name,
-      vehicle_info: `${selectedRoute.vehicle_make} ${selectedRoute.vehicle_color}`,
-      license_plate: selectedRoute.license_plate,
-    })
+    try {
+      const currentRoute = await getRouteById(selectedRoute.id)
+      if (!currentRoute) {
+        Alert.alert('Error', 'Esta ruta ya no está disponible.')
+        return
+      }
 
-    navigation.navigate('Booking' as never)
+      if (currentRoute.status !== 'scheduled') {
+        Alert.alert(
+          'Ruta no disponible',
+          'Esta ruta ya no está en estado programado. Vuelve a seleccionar otra ruta.'
+        )
+        return
+      }
+
+      const latestBookings = await getRouteBookings(selectedRoute.id, true)
+      const latestOccupiedSeats = new Set(latestBookings.map((b: any) => Number(b.seat_number)))
+      const invalidSeat = selectedSeats.find((seat) => latestOccupiedSeats.has(seat))
+      console.log('Attempting to reserve seats', selectedSeats, 'occupied:', Array.from(latestOccupiedSeats))
+
+      if (invalidSeat) {
+        Alert.alert(
+          'Asiento no disponible',
+          `El asiento ${invalidSeat} ya fue reservado. Vuelve a seleccionar.`
+        )
+        await loadBookings()
+        return
+      }
+
+      const reservedBookings = await reservePendingBookings(
+        selectedRoute.id,
+        authUser.id,
+        selectedSeats,
+        selectedRoute.price_per_seat
+      )
+
+      const totalPrice = selectedSeats.length * selectedRoute.price_per_seat
+
+      setBookingData({
+        route_id: selectedRoute.id,
+        seat_numbers: selectedSeats,
+        total_seats: selectedSeats.length,
+        price_per_seat: selectedRoute.price_per_seat,
+        total_price: totalPrice,
+        origin: selectedRoute.origin,
+        destination: selectedRoute.destination,
+        departure_time: selectedRoute.departure_time,
+        driver_name: selectedRoute.driver_name,
+        vehicle_info: `${selectedRoute.vehicle_make} ${selectedRoute.vehicle_color}`,
+        license_plate: selectedRoute.license_plate,
+        pending_booking_ids: reservedBookings.map((booking) => booking.id),
+      })
+
+      navigation.navigate('Booking' as never)
+    } catch (error: any) {
+      console.error('Error reservando asientos:', error)
+      if (error.code === 'SEAT_ALREADY_RESERVED') {
+        Alert.alert('Asiento no disponible', 'Uno o más asientos ya fueron reservados. Vuelve a seleccionar.')
+        await loadBookings()
+      } else {
+        Alert.alert('Error', error.message || 'Error al reservar asientos')
+      }
+    }
   }
 
   const departureDate = new Date(selectedRoute.departure_time)
@@ -172,8 +284,7 @@ export default function SeatSelectionScreen() {
                           isOccupied && styles.seatOccupied,
                           isSelected && styles.seatSelected,
                         ]}
-                        disabled={isOccupied}
-                        onPress={() => toggleSeat(seat.id)}
+                        onPress={() => handleSeatPress(seat.id, seat.available)}
                         activeOpacity={0.7}
                       >
                         <Text
@@ -210,8 +321,7 @@ export default function SeatSelectionScreen() {
                             isOccupied && styles.seatOccupied,
                             isSelected && styles.seatSelected,
                           ]}
-                          disabled={isOccupied}
-                          onPress={() => toggleSeat(seat.id)}
+                          onPress={() => handleSeatPress(seat.id, seat.available)}
                           activeOpacity={0.7}
                         >
                           <Text
@@ -586,6 +696,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     shadowOpacity: 0,
     elevation: 0,
+    opacity: 0.65,
   },
   seatSelected: {
     backgroundColor: COLORS.success,
@@ -598,7 +709,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   seatTextOccupied: {
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
   },
   seatTextSelected: {
     color: COLORS.textInverse,

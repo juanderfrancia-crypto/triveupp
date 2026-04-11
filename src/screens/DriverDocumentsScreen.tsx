@@ -106,64 +106,64 @@ export default function DriverDocumentsScreen() {
     loadDocuments()
 
     // Subscribe to real-time changes in driver_documents
-    const docSubscription = supabase
-      .channel(`driver_documents:${authUser.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'driver_documents',
-          filter: `driver_id=eq.${authUser.id}`,
-        },
-        () => {
-          // When any document changes, reload all documents
-          console.log('Document change detected, reloading...')
-          loadDocuments()
-        }
-      )
-      .subscribe()
+    const docSubscription = supabase.channel(`driver_documents:${authUser.id}`)
+    docSubscription.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'driver_documents',
+        filter: `driver_id=eq.${authUser.id}`,
+      },
+      () => {
+        // When any document changes, reload all documents
+        console.log('Document change detected, reloading...')
+        loadDocuments()
+      }
+    )
+    docSubscription.subscribe()
 
     // Subscribe to profile changes to detect when verification is complete
-    const profileSubscription = supabase
-      .channel(`profiles:${authUser.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${authUser.id}`,
-        },
-        (payload: any) => {
-          console.log('Profile update detected:', payload)
-          // If is_driver_verified just became true, show success message and refresh
-          if (payload.new?.is_driver_verified === true && !payload.old?.is_driver_verified) {
-            Alert.alert(
-              '¡Felicidades! 🎉',
-              'Todos tus documentos han sido verificados. ¡Ahora eres un conductor verificado!',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Refresh the user profile in store
-                    if (user?.id) {
-                      // This will trigger a profile refresh
-                      navigation.navigate('Main' as never)
-                    }
-                  },
+    const profileSubscription = supabase.channel(`profiles:${authUser.id}`)
+    profileSubscription.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${authUser.id}`,
+      },
+      (payload: any) => {
+        console.log('Profile update detected:', payload)
+        // If is_driver_verified just became true, show success message and refresh
+        if (payload.new?.is_driver_verified === true && !payload.old?.is_driver_verified) {
+          Alert.alert(
+            '¡Felicidades! 🎉',
+            'Todos tus documentos han sido verificados. ¡Ahora eres un conductor verificado!',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  // Refresh the user profile in store
+                  if (user?.id) {
+                    // This will trigger a profile refresh
+                    navigation.navigate('Main' as never)
+                  }
                 },
-              ]
-            )
-          }
+              },
+            ]
+          )
         }
-      )
-      .subscribe()
+      }
+    )
+    profileSubscription.subscribe()
 
     // Cleanup subscriptions on unmount
     return () => {
       docSubscription.unsubscribe()
+      supabase.removeChannel(docSubscription)
       profileSubscription.unsubscribe()
+      supabase.removeChannel(profileSubscription)
     }
   }, [authUser?.id])
 

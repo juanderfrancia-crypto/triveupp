@@ -47,6 +47,7 @@ export default function DriverRegisterScreen() {
   // Vehículo datos
   const [vehicleData, setVehicleData] = useState<any>(null)
   const [vehicleLoading, setVehicleLoading] = useState(true)
+  const [submittingRoute, setSubmittingRoute] = useState(false)
 
   const selectedVehicleType = VEHICLE_TYPES.find((v) => v.id === vehicleTypeId)
   const maxSeats = selectedVehicleType?.maxSeats || 0
@@ -138,12 +139,14 @@ export default function DriverRegisterScreen() {
   }
 
   const handleCreateRoute = async () => {
+    if (submittingRoute) return
     if (!validateForm()) return
     if (!user?.id) {
       Alert.alert('Error', 'Usuario no autenticado')
       return
     }
 
+    setSubmittingRoute(true)
     try {
       const now = new Date()
       const dateStr = now.toISOString().split('T')[0]
@@ -193,6 +196,8 @@ export default function DriverRegisterScreen() {
       setPricePerSeat('')
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Error al crear la ruta. Intenta de nuevo.')
+    } finally {
+      setSubmittingRoute(false)
     }
   }
 
@@ -485,12 +490,12 @@ export default function DriverRegisterScreen() {
 
         {/* Buttons */}
         <TouchableOpacity
-          style={[styles.submitBtn, routeLoading && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (routeLoading || submittingRoute) && styles.submitBtnDisabled]}
           onPress={handleCreateRoute}
-          disabled={routeLoading}
+          disabled={routeLoading || submittingRoute}
           activeOpacity={0.8}
         >
-          {routeLoading ? (
+          {routeLoading || submittingRoute ? (
             <ActivityIndicator size="small" color={COLORS.textInverse} />
           ) : (
             <>

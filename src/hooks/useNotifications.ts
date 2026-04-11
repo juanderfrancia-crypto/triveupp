@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
+import { useAppStore } from '../store/useAppStore';
 
 export interface Notification {
   id: string;
@@ -22,6 +23,11 @@ export const useNotifications = (userId?: string) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const setNotificationUnreadCount = useAppStore((state) => state.setNotificationUnreadCount);
+
+  useEffect(() => {
+    setNotificationUnreadCount(unreadCount);
+  }, [unreadCount, setNotificationUnreadCount]);
 
   // Obtener notificaciones
   const fetchNotifications = async () => {
@@ -109,14 +115,14 @@ export const useNotifications = (userId?: string) => {
 
       if (error) throw error;
 
+      const deletedWasUnread = notifications.find((n) => n.id === notificationId)?.is_read === false;
       setNotifications((prev) =>
         prev.filter((n) => n.id !== notificationId)
       );
 
-      setUnreadCount((prev) => {
-        const isUnread = notifications.find((n) => n.id === notificationId)?.is_read === false;
-        return isUnread ? Math.max(0, prev - 1) : prev;
-      });
+      if (deletedWasUnread) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
     } catch (err: any) {
       console.error('Error deleting notification:', err.message);
     }
@@ -159,22 +165,14 @@ export const useNotifications = (userId?: string) => {
 
     const setupSubscription = async () => {
       try {
-        // Limpiar canal anterior si existe
-        const existingChannel = supabase.getChannels()
-          .find((c: any) => c.topic === `realtime:notifications:${userId}`);
-        
-        if (existingChannel) {
-          await existingChannel.unsubscribe();
-          await supabase.removeChannel(existingChannel);
-        }
-
         // Cargar notificaciones iniciales
         await fetchNotifications();
 
         if (!isMounted) return;
 
-        // Crear nuevo canal
-        channelRef = supabase.channel(`notifications:${userId}`, {
+        // Crear un canal único para esta instancia
+        const channelName = `notifications:${userId}:${Date.now()}`;
+        channelRef = supabase.channel(channelName, {
           config: {
             broadcast: { self: true },
           },
@@ -220,7 +218,6 @@ export const useNotifications = (userId?: string) => {
           }
         );
 
-        // AHORA suscribirse
         await channelRef.subscribe((status: string) => {
           if (isMounted) {
             if (status === 'SUBSCRIBED') {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation, useRoute } from '@react-navigation/native'
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useRoutes, Route } from '../hooks/useRoutes'
@@ -26,8 +27,17 @@ export default function SearchScreen() {
   const [filter, setFilter] = useState<'all' | 'available'>('all')
   const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>('all')
   const [displayRoutes, setDisplayRoutes] = useState<Route[]>([])
+  const [refreshing, setRefreshing] = useState(false)
 
   // Cargar rutas al montar el componente
+  const loadRoutes = useCallback(async () => {
+    try {
+      await fetchRoutes(undefined, undefined, transportType)
+    } catch (err) {
+      Alert.alert('Error', 'No se pudieron cargar las rutas')
+    }
+  }, [fetchRoutes, transportType])
+
   useEffect(() => {
     const selectedType =
       route.params && typeof route.params === 'object' && 'transportType' in route.params
@@ -36,22 +46,31 @@ export default function SearchScreen() {
     setTransportType(selectedType)
   }, [route.params])
 
-  useEffect(() => {
-    loadRoutes()
-  }, [transportType])
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await loadRoutes()
+    } catch (err) {
+      // El error ya se maneja en loadRoutes.
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadRoutes])
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRoutes()
+      return () => {}
+    }, [loadRoutes])
+  )
+
+  const showLoading = loading && displayRoutes.length === 0
 
   // Actualizar rutas filtradas cuando cambian los datos
   useEffect(() => {
     filterAndDisplayRoutes()
-  }, [routes, search, filter])
+  }, [routes, search, filter, transportType])
 
-  const loadRoutes = async () => {
-    try {
-      await fetchRoutes(undefined, undefined, transportType)
-    } catch (err) {
-      Alert.alert('Error', 'No se pudieron cargar las rutas')
-    }
-  }
 
   const filterAndDisplayRoutes = () => {
     let filtered = routes.filter((route) => {
@@ -93,7 +112,18 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -158,7 +188,7 @@ export default function SearchScreen() {
         </View>
 
         {/* Content */}
-        {loading ? (
+        {showLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Buscando rutas...</Text>
@@ -179,7 +209,7 @@ export default function SearchScreen() {
             <View style={styles.emptyIcon}>
               <Ionicons name="search-outline" size={48} color={COLORS.primary} />
             </View>
-            <Text style={styles.emptyTitle}>No hay rutas</Text>
+            <Text style={styles.emptyTitle}>No hay rutas disponibles</Text>
             <Text style={styles.emptyText}>
               {search || filter === 'available'
                 ? 'Intenta con otros criterios de búsqueda'

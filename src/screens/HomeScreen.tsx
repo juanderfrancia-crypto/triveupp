@@ -6,14 +6,18 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { useRoutes, Route } from '../hooks/useRoutes'
+import { useNotifications } from '../hooks/useNotifications'
+import { useFocusEffect } from '@react-navigation/native'
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -26,12 +30,39 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>()
   const [transportType, setTransportType] = useState<'auto' | 'taxi' | 'busetica' | 'buseta'>('auto')
   const [destination, setDestination] = useState('')
+  const [topRoutes, setTopRoutes] = useState<Route[]>([])
+  const [isFetchingTopRoutes, setIsFetchingTopRoutes] = useState(false)
   const balance = useAppStore((state) => state.balance)
   const setBalance = useAppStore((state) => state.setBalance)
+  const user = useAppStore((state) => state.user)
+  const { loading: routesLoading, error: routesError, fetchRoutes } = useRoutes()
+  useNotifications(user?.id)
+  const notificationUnreadCount = useAppStore((state) => state.notificationUnreadCount)
+  const showRoutesLoading = (isFetchingTopRoutes || routesLoading) && topRoutes.length === 0
+  const showRoutesError = routesError && topRoutes.length === 0
 
   const handleAddCredit = () => {
     setBalance(balance + 10000)
   }
+
+  const loadTopDrivers = useCallback(async () => {
+    setIsFetchingTopRoutes(true)
+    setTopRoutes([])
+    try {
+      const routes = await fetchRoutes(undefined, undefined, transportType, 'driver_rating', false, 4)
+      setTopRoutes(routes)
+    } catch (err) {
+      console.warn('Error cargando rutas destacadas:', err)
+    } finally {
+      setIsFetchingTopRoutes(false)
+    }
+  }, [fetchRoutes, transportType])
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTopDrivers()
+    }, [loadTopDrivers])
+  )
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -75,9 +106,11 @@ export default function HomeScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="notifications-outline" size={24} color={COLORS.textPrimary} />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>2</Text>
-            </View>
+            {notificationUnreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationCount}>{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -171,15 +204,17 @@ export default function HomeScreen() {
         <View style={styles.transportSection}>
           <Text style={styles.sectionTitle}>Tipo de transporte</Text>
           <View style={styles.transportRow}>
-            {(['auto', 'taxi', 'busetica', 'buseta'] as const).map((type) => {
+            {(['all', 'auto', 'taxi', 'busetica', 'buseta'] as const).map((type) => {
               const isActive = transportType === type
               const icons: Record<string, string> = {
+                all: 'apps',
                 auto: 'car',
                 taxi: 'car-outline',
                 busetica: 'bus-outline',
                 buseta: 'bus',
               }
               const labels: Record<string, string> = {
+                all: 'Todos',
                 auto: 'Auto',
                 taxi: 'Taxi',
                 busetica: 'Busetica',
@@ -195,7 +230,7 @@ export default function HomeScreen() {
                   <View style={[styles.transportIcon, isActive && styles.transportIconActive]}>
                     <Ionicons
                       name={icons[type] as any}
-                      size={20}
+                      size={18}
                       color={isActive ? COLORS.textInverse : COLORS.primary}
                     />
                   </View>
@@ -256,7 +291,7 @@ export default function HomeScreen() {
               onPress={() =>
                 navigation.navigate(
                   'Main' as never,
-                  { screen: 'Search', params: { transportType } } as never,
+                  { screen: 'Search', params: { transportType: 'all' } } as never,
                 )
               }
             >
@@ -264,9 +299,113 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.emptySection}>
-            <Text style={styles.emptySectionTitle}>No hay rutas disponibles</Text>
-          </View>
+          {showRoutesLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Cargando mejores rutas...</Text>
+            </View>
+          ) : showRoutesError ? (
+            <View style={styles.emptySection}>
+              <Text style={styles.emptySectionTitle}>No se pudieron cargar las rutas</Text>
+              <Text style={styles.emptySectionText}>{routesError}</Text>
+            </View>
+          ) : topRoutes.length > 0 ? (
+            topRoutes.map((route: Route) => (
+              <TouchableOpacity
+                key={route.id}
+                style={styles.homeRouteCardWrapper}
+                activeOpacity={0.88}
+                onPress={() =>
+                  navigation.navigate(
+                    'Main' as never,
+                    { screen: 'Search', params: { transportType } } as never,
+                  )
+                }
+              >
+                <LinearGradient
+                  colors={[COLORS.primary, COLORS.primary + 'CC']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.homeRouteCardGradient}
+                >
+                  <View style={styles.homeRouteTop}>
+                    <View style={styles.homeRouteRouteContainer}>
+                      <View style={styles.homeRouteDotOrigin} />
+                      <View style={styles.homeRouteTextContainer}>
+                        <Text style={styles.homeRouteText} numberOfLines={1}>
+                          {route.origin}
+                        </Text>
+                        <Text style={styles.homeRouteTextSecondary} numberOfLines={1}>
+                          → {route.destination}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.homeSeatsAvailable}>
+                      <Text style={styles.homeSeatsText}>{route.available_seats} puesto{route.available_seats === 1 ? '' : 's'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.homeRouteMiddle}>
+                    <View style={styles.homeRouteDetailItem}>
+                      <Ionicons name="calendar-outline" size={14} color="#fff" />
+                      <Text style={styles.homeRouteDetailText}>
+                        {new Date(route.departure_time).toLocaleDateString('es-CO', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </Text>
+                    </View>
+                    <View style={styles.homeRouteDetailItem}>
+                      <Ionicons name="cash-outline" size={14} color="#fff" />
+                      <Text style={styles.homeRouteDetailText}>
+                        ${route.price_per_seat.toLocaleString('es-CO')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.homeRouteDivider} />
+
+                  <View style={styles.homeRouteBottom}>
+                    <View style={styles.homeRouteDriver}>
+                      <View style={styles.homeDriverAvatar}>
+                        <Text style={styles.homeDriverInitials}>
+                          {route.driver_name
+                            ? route.driver_name
+                                .split(' ')
+                                .map((name) => name[0])
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase()
+                            : 'DR'}
+                        </Text>
+                      </View>
+                      <View style={styles.homeDriverDetails}>
+                        <Text style={styles.homeDriverName} numberOfLines={1}>
+                          {route.driver_name || 'Conductor mejor calificado'}
+                        </Text>
+                        <View style={styles.homeRatingBadge}>
+                          <Ionicons name="star" size={12} color={COLORS.accent} />
+                          <Text style={styles.homeRatingText}>{route.driver_rating?.toFixed(1) ?? '0.0'}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.homeSeatsAvailable}>
+                      <Text style={styles.homeSeatsText}>
+                        {route.vehicle_type ? route.vehicle_type.charAt(0).toUpperCase() + route.vehicle_type.slice(1) : 'Transporte'}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptySection}>
+              <Text style={styles.emptySectionTitle}>No hay rutas disponibles</Text>
+              <Text style={styles.emptySectionText}>
+                Cambia el tipo de transporte o espera que nuevos viajes se publiquen.
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -582,13 +721,16 @@ const styles = StyleSheet.create({
   transportRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.lg,
-    gap: 10,
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   transportItem: {
     flex: 1,
+    minWidth: 60,
     backgroundColor: COLORS.surface,
     borderRadius: 14,
-    padding: 12,
+    padding: 10,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -605,13 +747,13 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   transportIcon: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
     borderRadius: 10,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
     borderWidth: 1.5,
     borderColor: COLORS.primary + '40',
   },
@@ -620,7 +762,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   transportLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: COLORS.textPrimary,
     textAlign: 'center',
@@ -695,7 +837,15 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
-
+  loadingContainer: {
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.sm,
+  },
   // Route Card
   routeCard: {
     backgroundColor: COLORS.surface,
@@ -850,17 +1000,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    minWidth: 0,
+  },
+  homeRouteTextContainer: {
+    flex: 1,
+    minWidth: 0,
   },
   homeRouteDotOrigin: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#fff',
+    marginTop: 3,
   },
   homeRouteText: {
     ...TYPOGRAPHY.bodyMedium,
     color: '#fff',
     fontWeight: '700',
+    flexShrink: 1,
+  },
+  homeRouteTextSecondary: {
+    ...TYPOGRAPHY.caption,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+    flexShrink: 1,
   },
   homeRoutePriceBox: {
     marginLeft: SPACING.md,

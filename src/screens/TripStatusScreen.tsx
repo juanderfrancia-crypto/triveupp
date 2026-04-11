@@ -11,7 +11,7 @@ import Toast from '../components/Toast'
 
 export default function TripStatusScreen() {
   const navigation = useNavigation<any>()
-  const { selectedRoute, selectedSeat, user } = useAppStore()
+  const { selectedRoute, selectedSeat, user, setBookingData } = useAppStore()
   const { getRouteBookings, loading, cancelBooking } = useBookings()
   const [bookings, setBookings] = useState<any[]>([])
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -28,8 +28,10 @@ export default function TripStatusScreen() {
       navigation.goBack()
       return
     }
+
+    setBookingData(null)
     loadBookings()
-  }, [selectedRoute])
+  }, [selectedRoute, setBookingData])
 
   const loadBookings = async () => {
     try {
@@ -147,18 +149,18 @@ export default function TripStatusScreen() {
               </View>
 
               <View style={styles.routeDisplay}>
-                <View style={styles.routePoint}>
+                      <View style={[styles.routePoint, styles.routePointColumn]}>
                   <View style={[styles.routeDotLarge, { backgroundColor: '#fff' }]} />
-                  <Text style={[styles.routeCity, { color: '#fff' }]}>{selectedRoute.origin}</Text>
+                  <Text style={[styles.routeCity, styles.routeCityWhite]} numberOfLines={2}>{selectedRoute.origin}</Text>
                 </View>
                 <View style={styles.routeArrow}>
                   <View style={[styles.routeLine, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
                   <Ionicons name="car" size={16} color="#fff" />
                   <View style={[styles.routeLine, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
                 </View>
-                <View style={styles.routePoint}>
+                <View style={[styles.routePoint, styles.routePointColumn]}>
                   <View style={[styles.routeDotLarge, styles.routeDotEnd, { backgroundColor: '#fff' }]} />
-                  <Text style={[styles.routeCity, { color: '#fff' }]}>{selectedRoute.destination}</Text>
+                  <Text style={[styles.routeCity, styles.routeCityWhite]} numberOfLines={2}>{selectedRoute.destination}</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -483,6 +485,9 @@ const styles = StyleSheet.create({
   routePoint: {
     alignItems: 'center',
   },
+  routePointColumn: {
+    maxWidth: 100,
+  },
   routeDotLarge: {
     width: 14,
     height: 14,
@@ -507,6 +512,11 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textPrimary,
     fontWeight: '600',
+    textAlign: 'center',
+    maxWidth: 100,
+  },
+  routeCityWhite: {
+    color: '#fff',
   },
 
   // Seats Card
@@ -732,10 +742,13 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
   },
   infoItem: {
     alignItems: 'center',
     flex: 1,
+    minWidth: 90,
   },
   infoDivider: {
     width: 1,
@@ -751,6 +764,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontWeight: '600',
     marginTop: 2,
+    textAlign: 'center',
   },
 
   // Action Buttons

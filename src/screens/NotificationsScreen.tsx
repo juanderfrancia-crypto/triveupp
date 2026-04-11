@@ -22,10 +22,13 @@ export default function NotificationsScreen() {
   const { user } = useAppStore()
   const { notifications, loading, unreadCount, markAsRead, markAllAsRead, deleteNotification, fetchNotifications } = useNotifications(user?.id)
   const [refreshing, setRefreshing] = useState(false)
+  const [expandedNotificationId, setExpandedNotificationId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchNotifications()
-  }, [])
+    if (user?.id) {
+      fetchNotifications()
+    }
+  }, [user?.id])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -35,6 +38,13 @@ export default function NotificationsScreen() {
 
   const handleMarkAsRead = (notificationId: string) => {
     markAsRead(notificationId)
+  }
+
+  const handleToggleNotification = (notificationId: string, isRead: boolean) => {
+    if (!isRead) {
+      markAsRead(notificationId)
+    }
+    setExpandedNotificationId((prev) => (prev === notificationId ? null : notificationId))
   }
 
   const handleDelete = (notificationId: string) => {
@@ -90,33 +100,84 @@ export default function NotificationsScreen() {
     })
   }
 
+  const getPrettyDataLabel = (key: string) => {
+    const map: Record<string, string> = {
+      route_id: 'Ruta',
+      booking_id: 'Reserva',
+      seat_numbers: 'Asientos',
+      departure_time: 'Fecha de partida',
+      user_id: 'Usuario',
+    }
+    return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (chr) => chr.toUpperCase())
+  }
+
+  const formatNotificationValue = (key: string, value: any) => {
+    if (value === null || value === undefined) return '-'
+    if (Array.isArray(value)) return value.join(', ')
+    if (key === 'departure_time' || key === 'created_at') {
+      const date = new Date(String(value))
+      return date.toLocaleString('es-CO', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    }
+    return String(value)
+  }
+
+  const shouldDisplayDataKey = (key: string) => {
+    const hiddenKeys = ['route_id', 'booking_id', 'user_id']
+    return !hiddenKeys.includes(key)
+  }
+
   const renderNotificationItem = ({ item }: { item: Notification }) => {
     const icon = getNotificationIcon(item.type)
+    const isExpanded = expandedNotificationId === item.id
+
     return (
       <TouchableOpacity
         style={[styles.notificationCard, !item.is_read && styles.notificationUnread]}
-        onPress={() => !item.is_read && handleMarkAsRead(item.id)}
-        activeOpacity={0.8}
+        onPress={() => handleToggleNotification(item.id, item.is_read)}
+        activeOpacity={0.9}
       >
-        <View style={styles.notificationContent}>
-          <View style={[styles.iconWrapper, { backgroundColor: icon.color + '20' }]}>
+        <View style={styles.notificationHeader}>
+          <View style={[styles.iconWrapper, { backgroundColor: icon.color + '20' }]}> 
             <Ionicons name={icon.name} size={22} color={icon.color} />
           </View>
-          <View style={styles.textWrapper}>
+          <View style={styles.headerTextContainer}>
             <View style={styles.titleRow}>
               <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
               <Text style={styles.notificationTime}>{formatDate(item.created_at)}</Text>
             </View>
-            <Text style={styles.notificationMessage} numberOfLines={2}>{item.message}</Text>
+            {!item.is_read && <Text style={styles.notificationBadge}>No leído</Text>}
           </View>
-          {!item.is_read && <View style={styles.unreadDot} />}
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDelete(item.id)}
+          >
+            <Ionicons name="close" size={18} color={COLORS.textTertiary} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => handleDelete(item.id)}
-        >
-          <Ionicons name="close" size={16} color={COLORS.textTertiary} />
-        </TouchableOpacity>
+        <View style={styles.notificationBody}>
+          <Text style={styles.notificationMessage} numberOfLines={isExpanded ? undefined : 3}>
+            {item.message}
+          </Text>
+          {isExpanded && item.data && Object.keys(item.data).some((key) => shouldDisplayDataKey(key)) && (
+            <View style={styles.notificationData}>
+              {Object.entries(item.data)
+                .filter(([key]) => shouldDisplayDataKey(key))
+                .map(([key, value]) => (
+                  <View key={key} style={styles.notificationDataRow}>
+                    <Text style={styles.notificationDataKey}>{getPrettyDataLabel(key)}:</Text>
+                    <Text style={styles.notificationDataValue}>{formatNotificationValue(key, value)}</Text>
+                  </View>
+                ))}
+            </View>
+          )}
+          <Text style={styles.expandHintText}>{isExpanded ? 'Cerrar' : 'Ver más'}</Text>
+        </View>
       </TouchableOpacity>
     )
   }
@@ -300,67 +361,101 @@ const styles = StyleSheet.create({
   // Notification Card
   notificationCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 6,
   },
   notificationUnread: {
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
   },
-  notificationContent: {
-    flex: 1,
+  notificationHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
   },
+  headerTextContainer: {
+    flex: 1,
+  },
+  notificationBody: {
+    marginTop: SPACING.sm,
+  },
   iconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  textWrapper: {
-    flex: 1,
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    gap: 8,
   },
   notificationTitle: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
   },
   notificationTime: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.caption,
     color: COLORS.textTertiary,
-    marginLeft: 8,
   },
   notificationMessage: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
+    lineHeight: 20,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    marginLeft: 8,
+  notificationBadge: {
+    marginTop: SPACING.xs,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary + '12',
+    color: COLORS.primary,
+    ...TYPOGRAPHY.caption,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   deleteBtn: {
     padding: 8,
+  },
+  expandHintText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.sm,
+    textAlign: 'right',
+  },
+  notificationData: {
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.primary + '08',
+    borderRadius: 14,
+  },
+  notificationDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  notificationDataKey: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginRight: SPACING.sm,
+  },
+  notificationDataValue: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textPrimary,
+    flex: 1,
+    textAlign: 'right',
   },
 
   // Empty State

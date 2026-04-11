@@ -22,6 +22,7 @@ interface AppState {
   selectedRoute: any | null
   bookingData: any | null
   hasSeenOnboarding: boolean
+  notificationUnreadCount: number
 
   setUser: (user: AppUser | null) => void
   setAuthUser: (user: User | null) => void
@@ -31,6 +32,7 @@ interface AppState {
   setSelectedRoute: (route: any | null) => void
   setBookingData: (data: any | null) => void
   setHasSeenOnboarding: (seen: boolean) => void
+  setNotificationUnreadCount: (notificationUnreadCount: number) => void
   logout: () => void
 }
 
@@ -44,6 +46,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedRoute: null,
   bookingData: null,
   hasSeenOnboarding: false,
+  notificationUnreadCount: 0,
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   setAuthUser: (authUser) => set({ authUser }),
@@ -53,6 +56,7 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedRoute: (selectedRoute) => set({ selectedRoute }),
   setBookingData: (bookingData) => set({ bookingData }),
   setHasSeenOnboarding: (hasSeenOnboarding) => set({ hasSeenOnboarding }),
+  setNotificationUnreadCount: (notificationUnreadCount) => set({ notificationUnreadCount }),
   logout: () => set({
     user: null,
     authUser: null,
