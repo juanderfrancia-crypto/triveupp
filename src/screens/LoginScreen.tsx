@@ -214,7 +214,11 @@ export default function LoginScreen() {
             </View>
 
             {/* Olvidaste tu contraseña */}
-            <TouchableOpacity style={styles.forgotBtn} disabled={isSubmitting}>
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => navigation.navigate('RecoveryAccount' as never)}
+              disabled={isSubmitting}
+            >
               <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
 

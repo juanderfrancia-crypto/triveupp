@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
@@ -11,7 +11,7 @@ import Toast from '../components/Toast'
 
 export default function ScheduledTripsScreen() {
   const navigation = useNavigation<any>()
-  const { user } = useAppStore()
+  const { user, setSelectedRoute } = useAppStore()
   const { getPassengerBookings, cancelBooking, loading: bookingsLoading } = useBookings()
   const [trips, setTrips] = useState<any[]>([])
   const [selectedTrip, setSelectedTrip] = useState<any>(null)
@@ -23,11 +23,7 @@ export default function ScheduledTripsScreen() {
     type: 'success' | 'error' | 'info' | 'warning'
   }>({ visible: false, message: '', type: 'info' })
 
-  useEffect(() => {
-    loadPassengerBookings()
-  }, [user])
-
-  const loadPassengerBookings = async () => {
+  const loadPassengerBookings = useCallback(async () => {
     if (!user) return
     try {
       const bookings = await getPassengerBookings(user.id)
@@ -39,6 +35,7 @@ export default function ScheduledTripsScreen() {
           return {
             id: booking.id,
             bookingId: booking.id,
+            routeId: route.id,
             origin: route.origin || 'Origen desconocido',
             destination: route.destination || 'Destino desconocido',
             date: route.departure_time ? new Date(route.departure_time).toISOString().split('T')[0] : '',
@@ -63,7 +60,13 @@ export default function ScheduledTripsScreen() {
       console.error('Error loading bookings:', error)
       setToastConfig({ visible: true, message: 'Error al cargar tus viajes', type: 'error' })
     }
-  }
+  }, [getPassengerBookings, setToastConfig, user])
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPassengerBookings()
+    }, [loadPassengerBookings])
+  )
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -135,11 +138,30 @@ export default function ScheduledTripsScreen() {
   }
 
   const handleViewStatus = (tripData: any) => {
-    // Pasar datos del viaje a TripStatusScreen
-    navigation.navigate('TripStatus' as never, { 
-      tripData: tripData,
-      fromScheduled: true
-    } as never)
+    setSelectedRoute({
+      id: tripData.routeId || tripData.bookingId,
+      origin: tripData.origin,
+      destination: tripData.destination,
+      departure_time: `${tripData.date}T${tripData.time}:00`,
+      driver_name: tripData.driverName,
+      driver_rating: tripData.driverRating,
+      vehicle_model: tripData.vehicleModel,
+      vehicle_plate: tripData.vehiclePlate,
+      vehicle_color: tripData.vehicleColor,
+      total_seats: tripData.totalSeats,
+      price_per_seat: tripData.price,
+      status: 'scheduled',
+    })
+    navigation.navigate('TripStatus' as never)
+    setModalVisible(false)
+  }
+
+  const handleChat = (tripData: any) => {
+    if (!tripData?.driverId) {
+      setToastConfig({ visible: true, message: 'No hay conductor asignado para chatear aún', type: 'warning' })
+      return
+    }
+    navigation.navigate('Chat' as never, { otherUserId: tripData.driverId } as never)
     setModalVisible(false)
   }
 
@@ -303,11 +325,16 @@ export default function ScheduledTripsScreen() {
                     </View>
 
                     <View style={styles.driverActionsImproved}>
-                      <TouchableOpacity style={styles.contactBtnLarge}>
+                      <TouchableOpacity style={styles.contactBtnLarge} onPress={() => {
+                        setToastConfig({ visible: true, message: 'Función de llamada aún no disponible', type: 'info' })
+                      }}>
                         <Ionicons name="call" size={20} color={COLORS.primary} />
                         <Text style={styles.contactBtnText}>Llamar</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.contactBtnLarge}>
+                      <TouchableOpacity
+                        style={styles.contactBtnLarge}
+                        onPress={() => handleChat(selectedTrip)}
+                      >
                         <Ionicons name="chatbubble-outline" size={20} color={COLORS.primary} />
                         <Text style={styles.contactBtnText}>Mensaje</Text>
                       </TouchableOpacity>
@@ -490,6 +517,13 @@ export default function ScheduledTripsScreen() {
                   >
                     <Ionicons name="close-circle-outline" size={18} color={COLORS.error} />
                     <Text style={styles.tripCardCancelText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.tripCardChatBtn}
+                    onPress={() => handleChat(trip)}
+                  >
+                    <Ionicons name="chatbubble-outline" size={18} color={COLORS.primary} />
+                    <Text style={styles.tripCardChatText}>Chat</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.tripCardViewBtn}
@@ -724,6 +758,23 @@ const styles = StyleSheet.create({
   tripCardCancelText: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.error,
+    fontWeight: '600',
+  },
+  tripCardChatBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+  },
+  tripCardChatText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.primary,
     fontWeight: '600',
   },
   tripCardViewBtn: {

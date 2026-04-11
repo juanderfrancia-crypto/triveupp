@@ -14,6 +14,15 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import { COLORS } from '../theme/colors';
 
+interface TopRoute {
+  route_id: string;
+  origin: string;
+  destination: string;
+  confirmed_bookings: number;
+  occupancy_rate: number;
+  status: string;
+}
+
 interface StatsData {
   total_trips: number;
   completed_trips: number;
@@ -22,6 +31,12 @@ interface StatsData {
   average_rating: number;
   total_passengers: number;
   total_earnings: number;
+  total_routes: number;
+  scheduled_routes: number;
+  in_progress_routes: number;
+  average_route_occupancy: number;
+  high_satisfaction_pct: number;
+  top_routes: TopRoute[];
 }
 
 export function StatsScreen() {
@@ -49,16 +64,16 @@ export function StatsScreen() {
         .eq('id', user?.id)
         .single();
 
-      // Get all routes
+      // Get all routes for the user
       const { data: routes } = await supabase
         .from('routes')
-        .select('id, status')
+        .select('id, origin, destination, total_seats, status')
         .eq('driver_id', user?.id);
 
       // Get bookings for earnings and passenger count
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('price, payment_status')
+        .select('route_id, price, payment_status, booking_status')
         .in(
           'route_id',
           routes?.map((r) => r.id) || []
@@ -72,12 +87,39 @@ export function StatsScreen() {
 
       const completedTrips = routes?.filter((r) => r.status === 'completed').length || 0;
       const cancelledTrips = routes?.filter((r) => r.status === 'cancelled').length || 0;
+      const scheduledTrips = routes?.filter((r) => r.status === 'scheduled').length || 0;
+      const inProgressTrips = routes?.filter((r) => r.status === 'in_progress').length || 0;
+      const confirmedBookings = bookings?.filter((b) => b.booking_status === 'confirmed') || [];
       const totalEarnings = bookings
         ?.filter((b) => b.payment_status === 'completed')
         .reduce((sum, b) => sum + (b.price || 0), 0) || 0;
 
       const totalRating = reviews?.reduce((sum, r) => sum + r.rating, 0) || 0;
       const averageRating = reviews && reviews.length > 0 ? totalRating / reviews.length : 0;
+      const highRatingCount = reviews?.filter((r) => r.rating >= 4).length || 0;
+      const highSatisfactionPct = reviews && reviews.length ? Math.round((highRatingCount / reviews.length) * 100) : 0;
+
+      const totalSeats = routes?.reduce((sum, route) => sum + (route.total_seats || 0), 0) || 0;
+      const occupancyRate = totalSeats ? Math.round((confirmedBookings.length / totalSeats) * 100) : 0;
+
+      const topRoutes: TopRoute[] = (routes || [])
+        .map((route) => {
+          const confirmedCount = confirmedBookings.filter((booking) => booking.route_id === route.id).length;
+          const occupancy = route.total_seats
+            ? Math.round((confirmedCount / route.total_seats) * 100)
+            : 0;
+
+          return {
+            route_id: route.id,
+            origin: route.origin || 'Origen',
+            destination: route.destination || 'Destino',
+            confirmed_bookings: confirmedCount,
+            occupancy_rate: occupancy,
+            status: route.status || 'scheduled',
+          };
+        })
+        .sort((a, b) => b.confirmed_bookings - a.confirmed_bookings)
+        .slice(0, 3);
 
       setStats({
         total_trips: profile?.total_trips || routes?.length || 0,
@@ -87,6 +129,12 @@ export function StatsScreen() {
         average_rating: Number(averageRating.toFixed(1)),
         total_passengers: bookings?.length || 0,
         total_earnings: totalEarnings,
+        total_routes: routes?.length || 0,
+        scheduled_routes: scheduledTrips,
+        in_progress_routes: inProgressTrips,
+        average_route_occupancy: occupancyRate,
+        high_satisfaction_pct: highSatisfactionPct,
+        top_routes: topRoutes,
       });
     } catch (err) {
       console.error('Error loading stats:', err);
@@ -154,6 +202,9 @@ export function StatsScreen() {
           <Text style={styles.ratingValue}>{stats?.average_rating || 0}</Text>
           <View style={styles.starsContainer}>{renderStarRating(stats?.average_rating || 0)}</View>
           <Text style={styles.ratingLabel}>Calificación Promedio</Text>
+          <Text style={styles.satisfactionLabel}>
+            {stats?.high_satisfaction_pct || 0}% de reseñas 4★ y 5★
+          </Text>
         </View>
         <View style={styles.ratingDivider} />
         <View style={styles.reviewCount}>
@@ -200,6 +251,45 @@ export function StatsScreen() {
           <Text style={styles.statCardLabel}>Pasajeros</Text>
         </View>
       </View>
+
+      {/* Operations and Route Usage */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Operaciones & Uso</Text>
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Rutas totales</Text>
+          <Text style={styles.perfValue}>{stats?.total_routes || 0}</Text>
+        </View>
+        <View style={styles.perfDivider} />
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Rutas agendadas</Text>
+          <Text style={styles.perfValue}>{stats?.scheduled_routes || 0}</Text>
+        </View>
+        <View style={styles.perfDivider} />
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>En progreso</Text>
+          <Text style={styles.perfValue}>{stats?.in_progress_routes || 0}</Text>
+        </View>
+        <View style={styles.perfDivider} />
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Ocupación promedio</Text>
+          <Text style={styles.perfValue}>{stats?.average_route_occupancy || 0}%</Text>
+        </View>
+      </View>
+
+      {stats?.top_routes && stats.top_routes.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Rutas más usadas</Text>
+          {stats.top_routes.map((route) => (
+            <View key={route.route_id} style={styles.routeItem}>
+              <Text style={styles.routeTitle}>{route.origin} → {route.destination}</Text>
+              <Text style={styles.routeSubtitle}>{route.confirmed_bookings} pasajeros · {route.occupancy_rate}% ocupación</Text>
+              <View style={styles.routeStatusBadge}>
+                <Text style={styles.routeStatusText}>{route.status}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Earnings Summary */}
       <View style={styles.card}>
@@ -306,6 +396,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     fontWeight: '600',
+  },
+  satisfactionLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    fontWeight: '500',
   },
   ratingDivider: {
     width: 1,
@@ -425,5 +521,35 @@ const styles = StyleSheet.create({
   perfDivider: {
     height: 1,
     backgroundColor: '#E5E7EB',
+  },
+  routeItem: {
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  routeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  routeSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  routeStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#E0F2FE',
+  },
+  routeStatusText: {
+    fontSize: 12,
+    color: '#0369A1',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });

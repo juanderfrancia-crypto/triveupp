@@ -46,7 +46,7 @@ export default function AboutScreen() {
           <Text style={styles.sectionTitle}>¿Qué es Trive?</Text>
           <View style={styles.card}>
             <Text style={styles.descriptionText}>
-              Trive es una plataforma de viajes compartidos que conecta conductores y pasajeros de manera segura y eficiente. Nuestro objetivo es hacer el transporte más accesible, asequible y sustentable para todos.
+              Trive es una plataforma de viajes compartidos que conecta conductores y pasajeros de manera segura y eficiente. Disfruta de un diseño moderno, navegación fluida y gestión en tiempo real de tus rutas y reservas.
             </Text>
           </View>
         </View>

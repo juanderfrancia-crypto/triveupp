@@ -20,7 +20,7 @@ import Toast from '../components/Toast'
 export default function BookingScreen() {
   const navigation = useNavigation<any>()
   const { selectedRoute, bookingData, user, authUser, setBookingData } = useAppStore()
-  const { createBooking, finalizePendingBookings, releasePendingBookings, loading } = useBookings()
+  const { createBooking, reservePendingBookings, finalizePendingBookings, releasePendingBookings, loading } = useBookings()
   const { createNotification } = useNotifications(authUser?.id)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
   const [pendingBookingIds, setPendingBookingIds] = useState<string[]>(bookingData?.pending_booking_ids ?? [])
@@ -76,7 +76,7 @@ export default function BookingScreen() {
   const serviceFee = Math.round(total_price * 0.15) // 15% de fee
   const finalTotal = total_price + serviceFee
 
-  const handleConfirmBooking = async () => {
+  const handleCashBooking = async () => {
     if (!authUser) {
       setToastMessage('Debes iniciar sesión para confirmar la reserva')
       setToastType('error')
@@ -88,7 +88,7 @@ export default function BookingScreen() {
       let results
 
       if (pendingBookingIds.length > 0) {
-        results = await finalizePendingBookings(pendingBookingIds, paymentMethod)
+        results = await finalizePendingBookings(pendingBookingIds, 'cash')
       } else {
         const bookingPromises = seat_numbers.map((seatNum: number) =>
           createBooking(
@@ -96,21 +96,22 @@ export default function BookingScreen() {
             authUser.id,
             seatNum,
             selectedRoute.price_per_seat,
-            paymentMethod
+            'cash',
+            'confirmed',
+            'completed'
           )
         )
         results = await Promise.all(bookingPromises)
       }
 
       const allSuccessful = Array.isArray(results)
-        ? results.every((r) => r !== null)
+        ? results.length === seat_numbers.length && results.every((r) => r !== null)
         : !!results
 
       if (allSuccessful) {
         setBookingFinalized(true)
         setPendingBookingIds([])
 
-        // Crear notificación
         try {
           await createNotification(authUser.id, {
             user_id: authUser.id,
@@ -150,6 +151,10 @@ export default function BookingScreen() {
         setToastVisible(true)
       }
     }
+  }
+
+  const handleConfirmBooking = async () => {
+    await handleCashBooking()
   }
 
   return (
@@ -292,7 +297,10 @@ export default function BookingScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.paymentOption, styles.paymentOptionDisabled]} disabled>
+          <TouchableOpacity
+            style={[styles.paymentOption, styles.paymentOptionDisabled]}
+            disabled
+          >
             <View style={styles.paymentRadio} />
             <Ionicons name="card-outline" size={24} color={COLORS.textSecondary} />
             <Text style={[styles.paymentText, styles.paymentTextDisabled]}>
@@ -351,7 +359,7 @@ export default function BookingScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.confirmBtnText}>Confirmar Reserva</Text>
+                <Text style={styles.confirmBtnText}>Confirmar reserva</Text>
               </>
             )}
           </TouchableOpacity>

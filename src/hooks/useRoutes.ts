@@ -242,7 +242,11 @@ export const useRoutes = () => {
         .single();
 
       if (error) throw error;
-      return data;
+      if (!data) return null;
+
+      const normalizedRoutes = await normalizeRouteAvailability([data as Route]);
+      const enrichedRoutes = await enrichRoutesWithDriverInfo(normalizedRoutes as Route[]);
+      return enrichedRoutes[0] || (data as Route);
     } catch (err: any) {
       const message = err.message || "Error fetching route";
       setError(message);

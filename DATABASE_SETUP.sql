@@ -147,6 +147,23 @@ CREATE POLICY "Users can view bookings for available routes" ON bookings
 CREATE POLICY "Users can create bookings" ON bookings
   FOR INSERT WITH CHECK (auth.uid() = passenger_id);
 
+-- Messages: secure chat data with row level security if the table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'messages' AND relkind = 'r') THEN
+    EXECUTE 'ALTER TABLE messages ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can view their messages" ON messages';
+    EXECUTE 'CREATE POLICY "Users can view their messages" ON messages FOR SELECT USING (auth.uid() = from_user_id OR auth.uid() = to_user_id)';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can insert their messages" ON messages';
+    EXECUTE 'CREATE POLICY "Users can insert their messages" ON messages FOR INSERT WITH CHECK (auth.uid() = from_user_id AND from_user_id <> to_user_id)';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can update their messages" ON messages';
+    EXECUTE 'CREATE POLICY "Users can update their messages" ON messages FOR UPDATE USING (auth.uid() = from_user_id OR auth.uid() = to_user_id) WITH CHECK (auth.uid() = from_user_id OR auth.uid() = to_user_id)';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can delete their messages" ON messages';
+    EXECUTE 'CREATE POLICY "Users can delete their messages" ON messages FOR DELETE USING (auth.uid() = from_user_id OR auth.uid() = to_user_id)';
+  END IF;
+END;
+$$;
+
 -- Seed data (commented out - create users via Auth first, then create profiles)
 -- After creating users in Supabase Auth, uncomment and update the UUIDs below
 /*

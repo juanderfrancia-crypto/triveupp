@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
@@ -11,7 +11,7 @@ import Toast from '../components/Toast'
 
 export default function TripStatusScreen() {
   const navigation = useNavigation<any>()
-  const { selectedRoute, selectedSeat, user, setBookingData } = useAppStore()
+  const { selectedRoute, bookingData, user, setBookingData } = useAppStore()
   const { getRouteBookings, loading, cancelBooking } = useBookings()
   const [bookings, setBookings] = useState<any[]>([])
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -23,24 +23,27 @@ export default function TripStatusScreen() {
   }>({ visible: false, message: '', type: 'info' })
   const [userBooking, setUserBooking] = useState<any>(null)
 
-  useEffect(() => {
-    if (!selectedRoute) {
-      navigation.goBack()
-      return
-    }
-
-    setBookingData(null)
-    loadBookings()
-  }, [selectedRoute, setBookingData])
-
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
+    if (!selectedRoute) return
     try {
-      const routeBookings = await getRouteBookings(selectedRoute!.id)
+      const routeBookings = await getRouteBookings(selectedRoute.id)
       setBookings(routeBookings)
     } catch (error) {
       console.log('Error loading bookings:', error)
     }
-  }
+  }, [getRouteBookings, selectedRoute])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedRoute) {
+        navigation.goBack()
+        return
+      }
+
+      setBookingData(null)
+      loadBookings()
+    }, [selectedRoute, setBookingData, loadBookings, navigation])
+  )
 
   if (!selectedRoute) return null
 
@@ -98,11 +101,19 @@ export default function TripStatusScreen() {
   }
 
   // Generate all seat statuses
+  const userSeatNumbers = new Set<number>([
+    ...(bookingData?.seat_numbers || []),
+    ...bookings.filter((b: any) => b.passenger_id === user?.id).map((b: any) => Number(b.seat_number)),
+  ])
+
   const occupiedSeatNumbers = new Set(bookings.map((b: any) => b.seat_number))
   const allSeats = Array.from({ length: totalSeats }, (_, i) => ({
     id: i + 1,
-    status:
-      occupiedSeatNumbers.has(i + 1) ? 'occupied' : selectedSeat === i + 1 ? 'selected' : 'available',
+    status: userSeatNumbers.has(i + 1)
+      ? 'selected'
+      : occupiedSeatNumbers.has(i + 1)
+      ? 'occupied'
+      : 'available',
   }))
 
   const occupiedPercentage = (occupiedSeats / totalSeats) * 100
@@ -248,7 +259,20 @@ export default function TripStatusScreen() {
                     <TouchableOpacity style={styles.callBtn}>
                       <Ionicons name="call" size={16} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.messageBtn}>
+                    <TouchableOpacity
+                      style={styles.messageBtn}
+                      onPress={() => {
+                        if (!selectedRoute?.driver_id) {
+                          setToastConfig({
+                            visible: true,
+                            message: 'No está disponible el chat con el conductor',
+                            type: 'error',
+                          })
+                          return
+                        }
+                        navigation.navigate('Chat' as never, { otherUserId: selectedRoute.driver_id } as never)
+                      }}
+                    >
                       <Ionicons name="chatbubble" size={16} color={COLORS.primary} />
                     </TouchableOpacity>
                   </View>

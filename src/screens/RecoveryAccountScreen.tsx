@@ -4,16 +4,34 @@ import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useState } from 'react'
+import { supabase } from '../services/supabase'
 
 export default function RecoveryAccountScreen() {
   const insets = useSafeAreaInsets()
   const navigation = useNavigation()
   const [email, setEmail] = useState('usuario@email.com')
   const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const handleSaveEmail = () => {
-    Alert.alert('Éxito', 'Correo de recuperación actualizado')
-    setIsEditing(false)
+  const handleSaveEmail = async () => {
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email.trim())) {
+      Alert.alert('Error', 'Ingresa un correo válido para enviar el enlace de recuperación')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim())
+      if (error) {
+        throw error
+      }
+      Alert.alert('Correo enviado', 'Revisa tu bandeja de entrada para restablecer tu contraseña.')
+      setIsEditing(false)
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo enviar el correo de recuperación')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

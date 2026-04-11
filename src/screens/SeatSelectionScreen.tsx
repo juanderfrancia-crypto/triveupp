@@ -503,7 +503,7 @@ export default function SeatSelectionScreen() {
             {/* Continue Button - Gradient */}
             <LinearGradient
               colors={
-                selectedSeats.length === 0
+                selectedSeats.length === 0 || loading
                   ? [COLORS.borderLight, COLORS.borderLight]
                   : [COLORS.primary, COLORS.primary + 'E0']
               }
@@ -513,23 +513,30 @@ export default function SeatSelectionScreen() {
             >
               <TouchableOpacity
                 style={styles.continueBtnInner}
-                disabled={selectedSeats.length === 0}
+                disabled={selectedSeats.length === 0 || loading}
                 onPress={handleContinue}
                 activeOpacity={0.8}
               >
-                <Ionicons
-                  name={selectedSeats.length === 0 ? 'alert-circle' : 'arrow-forward'}
-                  size={20}
-                  color={selectedSeats.length === 0 ? COLORS.textSecondary : '#fff'}
-                />
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" style={{ marginRight: 10 }} />
+                ) : (
+                  <Ionicons
+                    name={selectedSeats.length === 0 ? 'alert-circle' : 'arrow-forward'}
+                    size={20}
+                    color={selectedSeats.length === 0 ? COLORS.textSecondary : '#fff'}
+                    style={{ marginRight: 10 }}
+                  />
+                )}
                 <Text
                   style={[
                     styles.continueBtnText,
-                    selectedSeats.length === 0 && styles.continueBtnTextDisabled,
+                    (selectedSeats.length === 0 || loading) && styles.continueBtnTextDisabled,
                   ]}
                 >
                   {selectedSeats.length === 0
                     ? 'Selecciona tus asientos'
+                    : loading
+                    ? 'Reservando...'
                     : `Continuar - $${(selectedSeats.length * selectedRoute.price_per_seat).toLocaleString('es-CO')}`}
                 </Text>
               </TouchableOpacity>

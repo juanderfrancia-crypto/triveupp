@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -8,14 +8,15 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
-  Modal,
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
 import { useChat } from '../hooks/useChat'
 import { ChatBubble } from '../components/ChatBubble'
+import { useRoute } from '@react-navigation/native'
 
-export const ChatScreen = ({ navigation }: any) => {
+const ChatScreen = ({ navigation }: any) => {
   const { user } = useAuth()
+  const route = useRoute<any>()
   const {
     conversations,
     unreadCount,
@@ -28,8 +29,13 @@ export const ChatScreen = ({ navigation }: any) => {
     setCurrentOtherUserId,
   } = useChat(user?.id)
   const [inputText, setInputText] = useState('')
-  const [showTestModal, setShowTestModal] = useState(false)
-  const [testUserId, setTestUserId] = useState('')
+
+  useEffect(() => {
+    const otherUserId = route.params?.otherUserId as string | undefined
+    if (otherUserId) {
+      loadConversation(otherUserId)
+    }
+  }, [route.params?.otherUserId, loadConversation])
 
   const styles = StyleSheet.create({
     container: {
@@ -166,12 +172,6 @@ export const ChatScreen = ({ navigation }: any) => {
               <Text style={styles.title}>Mensajes</Text>
               {unreadCount > 0 && <Text style={{ color: '#007AFF', fontSize: 14 }}>({unreadCount} no leídos)</Text>}
             </View>
-            <TouchableOpacity
-              style={{ backgroundColor: '#007AFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 }}
-              onPress={() => setShowTestModal(true)}
-            >
-              <Text style={{ color: 'white', fontWeight: '600', fontSize: 12 }}>🧪 Test Chat</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -195,96 +195,12 @@ export const ChatScreen = ({ navigation }: any) => {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No hay conversaciones aún</Text>
               <Text style={{ color: '#999', fontSize: 12, marginTop: 8 }}>
-                Presiona "🧪 Test Chat" para empezar a comunicarse
+                Selecciona una conversación existente para empezar a chatear.
               </Text>
             </View>
           }
         />
 
-        {/* Modal para Test Chat */}
-        <Modal visible={showTestModal} animationType="slide" transparent>
-          <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 20 }}>
-              <View
-                style={{
-                  backgroundColor: 'white',
-                  borderRadius: 12,
-                  padding: 20,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 3.84,
-                  elevation: 5,
-                }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>🧪 Test Chat</Text>
-
-                <Text style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-                  Pega el UUID del usuario con el que quieres chatear:
-                </Text>
-
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#ddd',
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    marginBottom: 16,
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                  }}
-                  placeholder="ej: 550e8400-e29b-41d4-a716-446655440000"
-                  value={testUserId}
-                  onChangeText={setTestUserId}
-                  editable
-                />
-
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <TouchableOpacity
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#ddd',
-                      paddingVertical: 12,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                    }}
-                    onPress={() => {
-                      setShowTestModal(false)
-                      setTestUserId('')
-                    }}
-                  >
-                    <Text style={{ fontWeight: '600' }}>Cancelar</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#007AFF',
-                      paddingVertical: 12,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                    }}
-                    onPress={() => {
-                      if (testUserId.trim()) {
-                        // Validar que no sea el mismo usuario
-                        if (testUserId === user?.id) {
-                          alert('No puedes chatear contigo mismo')
-                          return
-                        }
-                        loadConversation(testUserId)
-                        setShowTestModal(false)
-                        setTestUserId('')
-                      }
-                    }}
-                  >
-                    <Text style={{ fontWeight: '600', color: 'white' }}>Chatear</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </SafeAreaView>
-        </Modal>
       </SafeAreaView>
     )
   }
@@ -357,3 +273,5 @@ export const ChatScreen = ({ navigation }: any) => {
     </SafeAreaView>
   )
 }
+
+export default ChatScreen

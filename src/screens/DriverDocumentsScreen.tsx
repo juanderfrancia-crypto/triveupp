@@ -172,13 +172,6 @@ export default function DriverDocumentsScreen() {
     useCallback(() => {
       if (authUser?.id) {
         loadDocuments()
-
-        // Auto-refresh every 3 seconds while on this screen
-        const interval = setInterval(() => {
-          loadDocuments()
-        }, 3000)
-
-        return () => clearInterval(interval)
       }
     }, [authUser?.id])
   )
@@ -286,15 +279,16 @@ export default function DriverDocumentsScreen() {
         copyToCacheDirectory: true,
       })
 
-      if (result.canceled) {
+      if (result.type !== 'success' || !result.uri) {
         setUploadingDocType(null)
         return
       }
 
-      const file = result.assets?.[0]
-      if (!file) {
-        setUploadingDocType(null)
-        return
+      const file = {
+        uri: result.uri,
+        name: result.name || `documento-${documentType}`,
+        size: result.size || 0,
+        mimeType: result.mimeType || 'application/octet-stream',
       }
 
       // Validate file size (max 10MB)

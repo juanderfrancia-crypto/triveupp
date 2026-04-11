@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -23,57 +23,80 @@ export default function SearchScreen() {
   const route = useRoute()
   const { routes, loading, error, fetchRoutes } = useRoutes()
   const { setSelectedRoute } = useAppStore()
-  const [search, setSearch] = useState('')
+  const routeTransportType = useMemo(() => {
+    if (route.params && typeof route.params === 'object' && 'transportType' in route.params) {
+      return route.params.transportType as 'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'
+    }
+    return 'all'
+  }, [route.params])
+
+  const routeDestination = useMemo(() => {
+    if (route.params && typeof route.params === 'object' && 'destination' in route.params) {
+      return String(route.params.destination)
+    }
+    return ''
+  }, [route.params])
+
+  const routeOrigin = useMemo(() => {
+    if (route.params && typeof route.params === 'object' && 'origin' in route.params) {
+      return String(route.params.origin)
+    }
+    return ''
+  }, [route.params])
+
+  const [search, setSearch] = useState(() => routeDestination || '')
   const [filter, setFilter] = useState<'all' | 'available'>('all')
-  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>('all')
-  const [displayRoutes, setDisplayRoutes] = useState<Route[]>([])
+  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>(routeTransportType)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Cargar rutas al montar el componente
-  const loadRoutes = useCallback(async () => {
+  useEffect(() => {
+    setSearch(routeDestination)
+  }, [routeDestination])
+
+  useEffect(() => {
+    setTransportType(routeTransportType)
+  }, [routeTransportType])
+
+  const loadRoutes = useCallback(async (
+    type: 'all' | 'auto' | 'taxi' | 'busetica' | 'buseta' = transportType,
+    origin?: string,
+    destination?: string,
+  ) => {
     try {
-      await fetchRoutes(undefined, undefined, transportType)
+      await fetchRoutes(
+        origin && origin.length > 0 ? origin : undefined,
+        destination && destination.length > 0 ? destination : undefined,
+        type,
+      )
     } catch (err) {
       Alert.alert('Error', 'No se pudieron cargar las rutas')
     }
   }, [fetchRoutes, transportType])
 
   useEffect(() => {
-    const selectedType =
-      route.params && typeof route.params === 'object' && 'transportType' in route.params
-        ? (route.params.transportType as 'auto' | 'taxi' | 'busetica' | 'buseta')
-        : 'all'
-    setTransportType(selectedType)
-  }, [route.params])
+    setTransportType(routeTransportType)
+  }, [routeTransportType])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      await loadRoutes()
-    } catch (err) {
-      // El error ya se maneja en loadRoutes.
+      await loadRoutes(routeTransportType, routeOrigin, routeDestination)
     } finally {
       setRefreshing(false)
     }
-  }, [loadRoutes])
+  }, [loadRoutes, routeTransportType, routeOrigin, routeDestination])
 
   useFocusEffect(
     useCallback(() => {
-      loadRoutes()
+      loadRoutes(routeTransportType, routeOrigin, routeDestination)
       return () => {}
-    }, [loadRoutes])
+    }, [loadRoutes, routeTransportType, routeOrigin, routeDestination])
   )
 
-  const showLoading = loading && displayRoutes.length === 0
+  const showLoading = loading && routes.length === 0
 
-  // Actualizar rutas filtradas cuando cambian los datos
-  useEffect(() => {
-    filterAndDisplayRoutes()
-  }, [routes, search, filter, transportType])
-
-
-  const filterAndDisplayRoutes = () => {
-    let filtered = routes.filter((route) => {
+  const displayRoutes = useMemo(() => {
+    return routes.filter((route) => {
       const matchSearch =
         route.origin.toLowerCase().includes(search.toLowerCase()) ||
         route.destination.toLowerCase().includes(search.toLowerCase())
@@ -82,8 +105,7 @@ export default function SearchScreen() {
         transportType === 'all' || route.vehicle_type === transportType
       return matchSearch && matchFilter && matchVehicleType
     })
-    setDisplayRoutes(filtered)
-  }
+  }, [routes, search, filter, transportType])
 
   const handleSelectRoute = (route: Route) => {
     // Guardar la ruta seleccionada en el store

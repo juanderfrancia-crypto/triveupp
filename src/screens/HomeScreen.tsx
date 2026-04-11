@@ -28,7 +28,7 @@ const getGreeting = () => {
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>()
-  const [transportType, setTransportType] = useState<'auto' | 'taxi' | 'busetica' | 'buseta'>('auto')
+  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>('auto')
   const [destination, setDestination] = useState('')
   const [topRoutes, setTopRoutes] = useState<Route[]>([])
   const [isFetchingTopRoutes, setIsFetchingTopRoutes] = useState(false)
@@ -188,7 +188,7 @@ export default function HomeScreen() {
             onPress={() =>
               navigation.navigate(
                 'Main' as never,
-                { screen: 'Search', params: { transportType } } as never,
+                { screen: 'Search', params: { transportType, destination: destination.trim() } } as never,
               )
             }
             activeOpacity={0.85}
@@ -281,12 +281,20 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Historial</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.quickActionItem}
+            onPress={() => navigation.navigate('Chat' as never)}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primary + '20' }]}> 
+              <Ionicons name="chatbubble-outline" size={18} color={COLORS.primary} />
+            </View>
+            <Text style={styles.quickActionText} numberOfLines={1}>Mensajes</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Routes Section */}
         <View style={styles.routesSection}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Rutas disponibles</Text>
+            <Text style={styles.sectionTitle}>Rutas destacadas</Text>
             <TouchableOpacity
               onPress={() =>
                 navigation.navigate(
@@ -294,6 +302,7 @@ export default function HomeScreen() {
                   { screen: 'Search', params: { transportType: 'all' } } as never,
                 )
               }
+              activeOpacity={0.8}
             >
               <Text style={styles.seeAllText}>Ver todas</Text>
             </TouchableOpacity>

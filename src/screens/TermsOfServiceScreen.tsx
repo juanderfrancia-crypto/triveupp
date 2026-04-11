@@ -44,9 +44,12 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>3. Requisitos de Uso</Text>
             <Text style={styles.text}>
-              • Debes tener al menos 18 años para usar Trive{'\n'}
-              • Debes proporcionar información exacta y completa{'\n'}
-              • Eres responsable de mantener la confidencialidad de tu cuenta{'\n'}
+              • Debes tener al menos 18 años para usar Trive
+
+              • Debes proporcionar información exacta y completa
+
+              • Eres responsable de mantener la confidencialidad de tu cuenta
+
               • Aceptas usar la aplicación solo para propósitos legales
             </Text>
           </View>
@@ -54,11 +57,16 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>4. Conductores</Text>
             <Text style={styles.text}>
-              Si ofreces servicios de transporte a través de Trive:{'\n'}
-              • Debes poseer una licencia de conducir válida{'\n'}
-              • Tu vehículo debe cumplir con estándares de seguridad{'\n'}
-              • Debes tener seguro de responsabilidad civil válido{'\n'}
-              • Estás sujeto a verificaciones de antecedentes{'\n'}
+              Si ofreces servicios de transporte a través de Trive:
+
+              • Debes poseer una licencia de conducir válida
+
+              • Tu vehículo debe cumplir con estándares de seguridad
+
+              • Debes tener seguro de responsabilidad civil válido
+
+              • Estás sujeto a verificaciones de antecedentes
+
               • Eres responsable de la seguridad de tus pasajeros
             </Text>
           </View>
@@ -66,10 +74,14 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>5. Pasajeros</Text>
             <Text style={styles.text}>
-              Si utilizas servicios de transporte a través de Trive:{'\n'}
-              • Debes proporcionar una dirección accuracy{'\n'}
-              • Debes respetar las políticas de cancelación{'\n'}
-              • Eres responsable de tu comportamiento durante el viaje{'\n'}
+              Si utilizas servicios de transporte a través de Trive:
+
+              • Debes proporcionar una dirección exacta
+
+              • Debes respetar las políticas de cancelación
+
+              • Eres responsable de tu comportamiento durante el viaje
+
               • Debes respetar el código de conducta de Trive
             </Text>
           </View>
@@ -77,19 +89,38 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>6. Pagos y Facturación</Text>
             <Text style={styles.text}>
-              • Los pagos se procesan a través de proveedores terceros seguros{'\n'}
-              • Todos los precios incluyen impuestos aplicables{'\n'}
-              • Trive se reserva el derecho de cambiar precios con notificación previa{'\n'}
+              • Los pagos se procesan a través de proveedores terceros seguros
+
+              • Todos los precios incluyen impuestos aplicables
+
+              • Trive se reserva el derecho de cambiar precios con notificación previa
+
               • Los reembolsos se procesarán de acuerdo con nuestra política
+            </Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>7. Seguridad y Protección de Datos</Text>
+            <Text style={styles.text}>
+              • Tu cuenta está protegida por autenticación de Supabase y tokens seguros
+
+              • No compartas tus credenciales con nadie
+
+              • Solo usuarios autenticados pueden acceder a viajes, mensajes y pagos
+
+              • Protegemos tus datos de pago y personales con medidas técnicas y de políticas internas
             </Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>7. Cancelaciones</Text>
             <Text style={styles.text}>
-              • Las cancelaciones gratuitas están disponibles dentro de 5 minutos de la confirmación{'\n'}
-              • Las cancelaciones después de este período pueden estar sujetas a cargos{'\n'}
-              • Los conductores pueden cancelar en caso de emergencia{'\n'}
+              • Las cancelaciones gratuitas están disponibles dentro de 5 minutos de la confirmación
+
+              • Las cancelaciones después de este período pueden estar sujetas a cargos
+
+              • Los conductores pueden cancelar en caso de emergencia
+
               • Trive puede cancelar servicios que violen nuestros términos
             </Text>
           </View>
@@ -97,11 +128,16 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>8. Comportamiento y Código de Conducta</Text>
             <Text style={styles.text}>
-              Se espera que todos los usuarios:{'\n'}
-              • Traten a otros usuarios con respeto{'\n'}
-              • No particen en acoso, discriminación o violencia{'\n'}
-              • Sigan las leyes de tránsito{'\n'}
-              • Mantengan la limpieza de los vehículos{'\n'}
+              Se espera que todos los usuarios:
+
+              • Traten a otros usuarios con respeto
+
+              • No particen en acoso, discriminación o violencia
+
+              • Sigan las leyes de tránsito
+
+              • Mantengan la limpieza de los vehículos
+
               • No realicen actividades ilegales
             </Text>
           </View>
@@ -109,11 +145,16 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>9. Limitación de Responsabilidad</Text>
             <Text style={styles.text}>
-              Trive no es responsable por:{'\n'}
-              • Daños indirectos o consecuentes{'\n'}
-              • Lesiones o daños durante el viaje{'\n'}
-              • Pérdida de datos o información{'\n'}
-              • Interrupción del servicio{'\n'}
+              Trive no es responsable por:
+
+              • Daños indirectos o consecuentes
+
+              • Lesiones o daños durante el viaje
+
+              • Pérdida de datos o información
+
+              • Interrupción del servicio
+
               • Acciones de terceros
             </Text>
           </View>
@@ -135,9 +176,12 @@ export default function TermsOfServiceScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>12. Contacto</Text>
             <Text style={styles.text}>
-              Si tienes preguntas sobre estos Términos de Servicio, contáctanos en:{'\n'}
-              📧 Email: soportetrive@gmail.com{'\n'}
-              📱 WhatsApp: +57 (300) 577-2967{'\n'}
+              Si tienes preguntas sobre estos Términos de Servicio, contáctanos en:
+
+              📧 Email: soportetrive@gmail.com
+
+              📱 WhatsApp: +57 (300) 577-2967
+
               ☎️ Teléfono: +57 (317) 302-8628
             </Text>
           </View>

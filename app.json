@@ -1,11 +1,13 @@
 {
   "expo": {
-    "name": "trive-app",
+    "name": "Trive",
     "slug": "trive-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0040A1"
     },
@@ -19,6 +21,7 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "description": "Trive es la app de viajes compartidos para conductores y pasajeros en Colombia. Reserva rutas, chatea con usuarios, gestiona viajes y accede a métricas en tiempo real.",
     "plugins": [
       "expo-web-browser"
     ]

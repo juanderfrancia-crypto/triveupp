@@ -19,33 +19,6 @@ export const useBookings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const adjustRouteAvailableSeats = useCallback(async (routeId: string, delta: number) => {
-    try {
-      const { data: routeData, error: routeFetchError } = await supabase
-        .from("routes")
-        .select("available_seats")
-        .eq("id", routeId)
-        .single();
-
-      if (routeFetchError) {
-        console.warn("Error fetching route for available seats adjustment:", routeFetchError);
-        return;
-      }
-
-      const newAvailableSeats = Math.max((routeData?.available_seats ?? 0) + delta, 0);
-      const { error: routeUpdateError } = await supabase
-        .from("routes")
-        .update({ available_seats: newAvailableSeats })
-        .eq("id", routeId);
-
-      if (routeUpdateError) {
-        console.warn("Error updating route available seats:", routeUpdateError);
-      }
-    } catch (error) {
-      console.warn("Error adjusting route available seats:", error);
-    }
-  }, []);
-
   const createBooking = useCallback(async (
     routeId: string,
     passengerId: string,
@@ -84,10 +57,6 @@ export const useBookings = () => {
         throw bookingError;
       }
 
-      if (bookingStatus === 'confirmed') {
-        await adjustRouteAvailableSeats(routeId, -1);
-      }
-
       return data;
     } catch (err: any) {
       const message = err.message || "Error creating booking";
@@ -96,13 +65,14 @@ export const useBookings = () => {
     } finally {
       setLoading(false);
     }
-  }, [adjustRouteAvailableSeats]);
+  }, []);
 
   const reservePendingBookings = useCallback(async (
     routeId: string,
     passengerId: string,
     seatNumbers: number[],
-    price: number
+    price: number,
+    paymentMethod: string = 'card'
   ) => {
     try {
       setError(null);
@@ -113,7 +83,7 @@ export const useBookings = () => {
         passenger_id: passengerId,
         seat_number,
         price,
-        payment_method: 'pending',
+        payment_method: paymentMethod,
         payment_status: 'pending',
         booking_status: 'pending',
       }));
@@ -132,7 +102,6 @@ export const useBookings = () => {
         throw bookingError;
       }
 
-      await adjustRouteAvailableSeats(routeId, -seatNumbers.length);
       return (data as Booking[]) || [];
     } catch (err: any) {
       const message = err.message || 'Error reservando asientos';
@@ -141,7 +110,7 @@ export const useBookings = () => {
     } finally {
       setLoading(false);
     }
-  }, [adjustRouteAvailableSeats]);
+  }, []);
 
   const finalizePendingBookings = useCallback(async (
     bookingIds: string[],
@@ -184,9 +153,6 @@ export const useBookings = () => {
       if (error) throw error;
 
       const releasedCount = (data as any[]).length || 0;
-      if (releasedCount > 0) {
-        await adjustRouteAvailableSeats(routeId, releasedCount);
-      }
       return data;
     } catch (err: any) {
       const message = err.message || 'Error liberando reservas pendientes';
@@ -195,7 +161,7 @@ export const useBookings = () => {
     } finally {
       setLoading(false);
     }
-  }, [adjustRouteAvailableSeats]);
+  }, []);
 
   const cleanupExpiredPendingBookings = useCallback(async (routeId: string, lockMinutes = 5) => {
     try {
@@ -225,11 +191,10 @@ export const useBookings = () => {
         return;
       }
 
-      await adjustRouteAvailableSeats(routeId, expiredIds.length);
     } catch (error) {
       console.warn('Error cleaning up expired pending bookings:', error);
     }
-  }, [adjustRouteAvailableSeats]);
+  }, []);
 
   const getPassengerBookings = useCallback(async (passengerId: string) => {
     try {
@@ -304,29 +269,6 @@ export const useBookings = () => {
         .eq("id", bookingId);
 
       if (updateError) throw updateError;
-
-      // Increment available_seats for the route
-      if (bookingData.route_id) {
-        // Get current available_seats value
-        const { data: routeData, error: routeFetchError } = await supabase
-          .from("routes")
-          .select("available_seats")
-          .eq("id", bookingData.route_id)
-          .single();
-
-        if (!routeFetchError && routeData) {
-          const newAvailableSeats = (routeData.available_seats || 0) + 1;
-          const { error: routeUpdateError } = await supabase
-            .from("routes")
-            .update({ available_seats: newAvailableSeats })
-            .eq("id", bookingData.route_id);
-
-          if (routeUpdateError) {
-            console.warn("Error incrementing available seats:", routeUpdateError);
-            // Don't throw - the booking was already cancelled
-          }
-        }
-      }
 
       return bookingData;
     } catch (err: any) {
