@@ -288,10 +288,24 @@ export default function TripStatusScreen() {
                   <View style={styles.ratingRow}>
                     <Ionicons name="star" size={12} color={COLORS.accent} />
                     <Text style={styles.ratingText}>{selectedRoute.driver_rating || '0'}</Text>
-                    <Text style={styles.ratingLabel}> ·conductor verificado</Text>
+                    <Text style={styles.ratingLabel}> · conductor verificado</Text>
                   </View>
                 </View>
               </View>
+
+              <TouchableOpacity
+                style={styles.quickChatBtn}
+                onPress={() => {
+                  if (!selectedRoute?.driver_id) {
+                    setToastConfig({ visible: true, message: 'No está disponible el chat con el conductor', type: 'error' })
+                    return
+                  }
+                  navigation.navigate('Chat' as never, { otherUserId: selectedRoute.driver_id } as never)
+                }}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+                <Text style={styles.quickChatBtnText}>Contactar conductor</Text>
+              </TouchableOpacity>
             </LinearGradient>
 
             {/* Trip Info Card */}
@@ -818,6 +832,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   newTripBtnText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  quickChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md,
+    marginTop: SPACING.sm,
+  },
+  quickChatBtnText: {
     ...TYPOGRAPHY.bodyMedium,
     color: '#fff',
     fontWeight: '700',

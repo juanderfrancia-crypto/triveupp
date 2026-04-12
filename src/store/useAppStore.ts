@@ -10,6 +10,8 @@ export interface AppUser {
   rating: number
   avatar_url?: string
   is_admin?: boolean
+  spent?: number
+  earnings?: number
 }
 
 interface AppState {

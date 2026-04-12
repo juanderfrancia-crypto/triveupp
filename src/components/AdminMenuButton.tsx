@@ -6,10 +6,9 @@ import {
   Text,
   Modal,
   ScrollView,
-  SafeAreaView,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAppStore } from '../store/useAppStore'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 

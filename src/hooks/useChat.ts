@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
+  getChatContactsForUser,
   getConversations,
   getConversation,
   sendMessage,
@@ -7,11 +8,13 @@ import {
   deleteConversation,
   Message,
   Conversation,
+  ChatContact,
 } from '../services/messages'
 
 export const useChat = (userId?: string) => {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [messages, setMessages] = useState<Message[]>([])
+  const [contacts, setContacts] = useState<ChatContact[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentOtherUserId, setCurrentOtherUserId] = useState<string | null>(null)
@@ -39,6 +42,21 @@ export const useChat = (userId?: string) => {
     // Polling cada 2 segundos (NO es ideal, pero es simple sin WebSocket)
     const interval = setInterval(loadConversations, 2000)
     return () => clearInterval(interval)
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+
+    const loadContacts = async () => {
+      try {
+        const data = await getChatContactsForUser(userId)
+        setContacts(data)
+      } catch (err: any) {
+        console.error('Error loading chat contacts:', err)
+      }
+    }
+
+    loadContacts()
   }, [userId])
 
   // ============================================
@@ -141,6 +159,7 @@ export const useChat = (userId?: string) => {
 
   return {
     conversations,
+    contacts,
     messages,
     loading,
     error,

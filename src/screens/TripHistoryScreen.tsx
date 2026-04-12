@@ -471,11 +471,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tripCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryDark,
   },
   tripHeader: {
     flexDirection: 'row',
@@ -503,7 +505,7 @@ const styles = StyleSheet.create({
   },
   tripDate: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textSecondary,
+    color: COLORS.textInverse + 'CC',
   },
   routeRow: {
     flexDirection: 'row',
@@ -526,7 +528,7 @@ const styles = StyleSheet.create({
   },
   routeText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
+    color: COLORS.textInverse,
     fontWeight: '600',
   },
   routeArrow: {
@@ -544,7 +546,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textSecondary,
+    color: COLORS.textInverse + 'DD',
   },
   tripFooter: {
     flexDirection: 'row',
@@ -559,7 +561,7 @@ const styles = StyleSheet.create({
   },
   driverText: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textSecondary,
+    color: COLORS.textInverse + 'DD',
   },
   ratingBadge: {
     flexDirection: 'row',

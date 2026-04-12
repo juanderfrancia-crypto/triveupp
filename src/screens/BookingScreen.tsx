@@ -173,7 +173,7 @@ export default function BookingScreen() {
 
         {/* Route Card */}
         <LinearGradient
-          colors={[COLORS.primary + 'F5', COLORS.primary + 'A0']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.tripCardGradient}
@@ -215,7 +215,7 @@ export default function BookingScreen() {
 
         {/* Seats Card */}
         <LinearGradient
-          colors={['#FFFFFF', COLORS.primary + '1A']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.seatsCardGradient}
@@ -235,7 +235,7 @@ export default function BookingScreen() {
 
         {/* Passenger Card */}
         <LinearGradient
-          colors={['#FFFFFF', COLORS.primary + '12']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.passengerCardGradient}
@@ -255,7 +255,7 @@ export default function BookingScreen() {
 
         {/* Vehicle Card */}
         <LinearGradient
-          colors={['#FFFFFF', COLORS.primary + '15']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.vehicleCardGradient}
@@ -277,7 +277,7 @@ export default function BookingScreen() {
 
         {/* Payment Method */}
         <LinearGradient
-          colors={['#FFFFFF', COLORS.primary + '10']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.paymentCardGradient}
@@ -311,7 +311,7 @@ export default function BookingScreen() {
 
         {/* Price Summary */}
         <LinearGradient
-          colors={['#FFFFFF', COLORS.primary + '0D']}
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.priceCardGradient}
@@ -461,31 +461,31 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.primary,
     marginBottom: SPACING.xs,
   },
   routeDotEnd: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.accent,
     marginBottom: SPACING.xs,
   },
   routeLabel: {
     ...TYPOGRAPHY.label,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: COLORS.textSecondary,
     marginBottom: 2,
     textTransform: 'uppercase',
   },
   routeText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: '#fff',
+    color: COLORS.textPrimary,
     fontWeight: '700',
     textAlign: 'center',
     lineHeight: 20,
   },
   routeTextWhite: {
-    color: '#fff',
+    color: COLORS.textPrimary,
   },
   routeLine: {
     position: 'absolute',

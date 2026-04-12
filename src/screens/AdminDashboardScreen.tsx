@@ -5,13 +5,13 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   Modal,
   TextInput,
   Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { useAuth } from '../hooks/useAuth'
 import {

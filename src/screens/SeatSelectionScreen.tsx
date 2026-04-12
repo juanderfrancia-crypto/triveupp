@@ -243,7 +243,7 @@ export default function SeatSelectionScreen() {
           <>
             {/* Vehicle Card - Gradient */}
             <LinearGradient
-              colors={['#FFFFFF', COLORS.primary + '1A']}
+              colors={['#FFFFFF', COLORS.surfaceAlt]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.vehicleCardGradient}
@@ -364,16 +364,10 @@ export default function SeatSelectionScreen() {
 
             {/* Selected Seats Counter - Gradient */}
             <LinearGradient
-              colors={[
-                selectedSeats.length > 0 ? COLORS.primary : COLORS.surface,
-                selectedSeats.length > 0 ? COLORS.primary + 'E0' : COLORS.surface,
-              ]}
+              colors={['#FFFFFF', COLORS.surfaceAlt]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[
-                styles.selectionCardGradient,
-                selectedSeats.length > 0 && styles.selectionCardGradientActive,
-              ]}
+              style={styles.selectionCardGradient}
             >
               <View style={styles.selectionInfo}>
                 <View
@@ -417,7 +411,7 @@ export default function SeatSelectionScreen() {
 
             {/* Trip Card - Gradient */}
             <LinearGradient
-              colors={[COLORS.primary + 'F5', COLORS.primary + 'A0']}
+              colors={['#FFFFFF', COLORS.surfaceAlt]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.tripCardGradient}
@@ -454,7 +448,7 @@ export default function SeatSelectionScreen() {
 
             {/* Driver Card - Gradient */}
             <LinearGradient
-              colors={['#FFFFFF', COLORS.primary + '12']}
+              colors={['#FFFFFF', COLORS.surfaceAlt]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.driverCardGradient}
@@ -476,7 +470,7 @@ export default function SeatSelectionScreen() {
 
             {/* Summary - Gradient */}
             <LinearGradient
-              colors={['#FFFFFF', COLORS.primary + '10']}
+              colors={['#FFFFFF', COLORS.surfaceAlt]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.summaryCardGradient}
@@ -690,12 +684,12 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
     justifyContent: 'center',
     alignItems: 'center',
     ...SHADOWS.sm,
-    borderTopColor: COLORS.shadowWhiteMid,
-    borderTopWidth: 1.5,
   },
   seatOccupied: {
     backgroundColor: COLORS.surfaceAlt,
@@ -706,13 +700,13 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   seatSelected: {
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.primary,
     borderWidth: 2,
-    borderColor: COLORS.success,
+    borderColor: COLORS.primary,
   },
   seatText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: COLORS.primary,
     fontWeight: '700',
   },
   seatTextOccupied: {

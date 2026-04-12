@@ -134,8 +134,17 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+      <LinearGradient
+        colors={[COLORS.background, COLORS.surfaceAlt]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.backgroundGradient}
+      />
+      <View style={styles.decorativeCircleLarge} />
+      <View style={styles.decorativeCircleSmall} />
       <ScrollView
         style={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -166,7 +175,7 @@ export default function SearchScreen() {
             <Ionicons name="search" size={20} color={COLORS.primary} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar ruta..."
+              placeholder="Buscar por origen o destino"
               placeholderTextColor={COLORS.textTertiary}
               value={search}
               onChangeText={setSearch}
@@ -248,18 +257,24 @@ export default function SearchScreen() {
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={[COLORS.primary, COLORS.primary + 'CC']}
+                  colors={[COLORS.primaryDark, COLORS.primary]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.routeCardGradient}
                 >
                   {/* Status Badge */}
-                  <View style={styles.routeCardBadge}>
-                    <Ionicons name="checkmark-circle" size={12} color="#fff" />
+                  <View style={[styles.routeCardBadge, route.available_seats > 0 ? styles.badgeAvailable : styles.badgeFull]}>
+                    <Ionicons name={route.available_seats > 0 ? 'checkmark-circle' : 'close-circle'} size={12} color={COLORS.textInverse} />
                     <Text style={styles.routeCardBadgeText}>
                       {route.available_seats > 0 ? 'Disponible' : 'Lleno'}
                     </Text>
                   </View>
+
+                  {route.vehicle_type && (
+                    <View style={styles.routeCardType}>
+                      <Text style={styles.routeCardTypeText}>{route.vehicle_type}</Text>
+                    </View>
+                  )}
 
                   {/* Route Section */}
                   <View style={styles.routeCardRouteSection}>
@@ -274,7 +289,7 @@ export default function SearchScreen() {
                     </View>
 
                     <View style={styles.routeCardArrow}>
-                      <Ionicons name="arrow-forward" size={16} color="#fff" />
+                      <Ionicons name="arrow-forward" size={16} color={COLORS.textInverse} />
                     </View>
 
                     <View style={styles.routeCardDestination}>
@@ -291,14 +306,14 @@ export default function SearchScreen() {
                   {/* Footer with Details */}
                   <View style={styles.routeCardFooterSection}>
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="time-outline" size={14} color="#fff" />
+                      <Ionicons name="time-outline" size={14} color={COLORS.textInverse} />
                       <Text style={styles.routeCardFooterText}>
                         {formatTime(route.departure_time, route.arrival_time)}
                       </Text>
                     </View>
                     <View style={styles.routeCardFooterDivider} />
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="calendar-outline" size={14} color="#fff" />
+                      <Ionicons name="calendar-outline" size={14} color={COLORS.textInverse} />
                       <Text style={styles.routeCardFooterText}>
                         {new Date(route.departure_time).toLocaleDateString('es-CO', {
                           month: 'short',
@@ -308,7 +323,7 @@ export default function SearchScreen() {
                     </View>
                     <View style={styles.routeCardFooterDivider} />
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="cash-outline" size={14} color="#fff" />
+                      <Ionicons name="cash-outline" size={14} color={COLORS.textInverse} />
                       <Text style={styles.routeCardFooterText}>{formatPrice(route.price_per_seat)}</Text>
                     </View>
                   </View>
@@ -344,7 +359,7 @@ export default function SearchScreen() {
 
                   <View style={styles.routeCardCTA}>
                     <Text style={styles.routeCardCTAText}>Ver detalles</Text>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                    <Ionicons name="chevron-forward" size={16} color={COLORS.textInverse} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -361,9 +376,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  backgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  decorativeCircleLarge: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: COLORS.surface + 'EE',
+    top: -70,
+    left: -50,
+  },
+  decorativeCircleSmall: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.accentLight + '18',
+    top: 120,
+    right: -40,
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
+  },
+  scrollContent: {
+    paddingBottom: SPACING.xxxl,
   },
 
   // Header
@@ -404,19 +443,14 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface + 'F5', // 96.1% opacidad
+    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.lg,
-    height: 48,
+    height: 52,
     gap: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.borderLight + 'B3', // Semi-transparente
-    ...SHADOWS.md, // Sombra reforzada
-    // Efecto de luz blanca desde arriba
-    borderTopColor: COLORS.shadowWhiteMid,
-    borderTopWidth: 1.5,
-    borderLeftColor: COLORS.shadowWhiteDark,
-    borderLeftWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOWS.sm,
   },
   searchInput: {
     flex: 1,
@@ -564,26 +598,50 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    ...SHADOWS.md,
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.sm,
   },
   routeCardGradient: {
+    borderRadius: RADIUS.xl,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.lg,
+    backgroundColor: COLORS.primary,
+    borderWidth: 1,
+    borderColor: COLORS.primaryDark,
   },
   routeCardBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: RADIUS.full,
     alignSelf: 'flex-start',
     marginBottom: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  badgeAvailable: {
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+  },
+  badgeFull: {
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
   },
   routeCardBadgeText: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
+    fontWeight: '600',
+  },
+  routeCardType: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  routeCardTypeText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textInverse,
     fontWeight: '600',
   },
   routeCardRouteSection: {
@@ -608,7 +666,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -617,12 +675,12 @@ const styles = StyleSheet.create({
   },
   routeCardLocationLabel: {
     ...TYPOGRAPHY.label,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.textInverse + 'CC',
     marginBottom: SPACING.xs,
   },
   routeCardLocationName: {
     ...TYPOGRAPHY.bodyMedium,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '700',
   },
   routeCardArrow: {
@@ -632,7 +690,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
+    borderTopColor: 'rgba(255,255,255,0.18)',
     paddingTop: SPACING.md,
     marginTop: SPACING.md,
   },
@@ -644,7 +702,7 @@ const styles = StyleSheet.create({
   },
   routeCardFooterText: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '600',
     flex: 1,
   },
@@ -659,7 +717,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     padding: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.primaryDark,
     borderBottomLeftRadius: RADIUS.xl,
     borderBottomRightRadius: RADIUS.xl,
   },
@@ -700,7 +758,7 @@ const styles = StyleSheet.create({
   },
   routeCardCTAText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.primary,
+    color: COLORS.textInverse,
     fontWeight: '600',
   },
 

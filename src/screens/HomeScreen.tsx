@@ -7,17 +7,26 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useRoutes, Route } from '../hooks/useRoutes'
 import { useNotifications } from '../hooks/useNotifications'
 import { useFocusEffect } from '@react-navigation/native'
+import { useUserLocation } from '../hooks/useUserLocation'
+import {
+  calculateTripProgress,
+  getTripStatusMessage,
+  getCoordinatesFromLocationName,
+  getNearestLocation,
+} from '../utils/tripProgress'
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -32,18 +41,134 @@ export default function HomeScreen() {
   const [destination, setDestination] = useState('')
   const [topRoutes, setTopRoutes] = useState<Route[]>([])
   const [isFetchingTopRoutes, setIsFetchingTopRoutes] = useState(false)
+  const [animationType, setAnimationType] = useState<'car' | 'map'>('car')
+  
+  // Estado del progreso del viaje real
+  const [tripProgress, setTripProgress] = useState<number>(0)
+  const [locationStatus, setLocationStatus] = useState<string>('')
+  const [hasActiveTrip, setHasActiveTrip] = useState<boolean>(false)
+  
+  // Obtener ubicación del usuario
+  const { location: userLocation, loading: locationLoading, error: locationError } = useUserLocation(5)
+  
+  // Animación del carro
+  const carPositionAnim = useRef(new Animated.Value(0)).current
+  const realTripProgressAnim = useRef(new Animated.Value(0)).current
+  const mapOpacityAnim = useRef(new Animated.Value(0)).current
+  
+  // Iniciar animación DEMO (cuando no hay viaje activo)
+  useEffect(() => {
+    if (hasActiveTrip) {
+      // Si hay viaje activo, no usar demo
+      return
+    }
+    
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(carPositionAnim, {
+          toValue: 1,
+          duration: 3000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(carPositionAnim, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start()
+  }, [carPositionAnim, hasActiveTrip])
+  
+  // Cambiar tipo de animación DEMO cada 6 segundos (solo si no hay viaje activo)
+  useEffect(() => {
+    if (hasActiveTrip) {
+      return // No alternar si hay viaje activo
+    }
+    
+    const interval = setInterval(() => {
+      setAnimationType(prev => prev === 'car' ? 'map' : 'car')
+    }, 6000)
+    return () => clearInterval(interval)
+  }, [hasActiveTrip])
+  
+  // Calcular progreso real del viaje si hay viaje activo, o demo
+  useEffect(() => {
+    if (!userLocation) {
+      return
+    }
+    
+    let progress
+    let status
+    
+    // Si hay viaje activo, usar coordenadas reales
+    if (selectedRoute) {
+      const originCoords = getCoordinatesFromLocationName(selectedRoute.origin)
+      const destCoords = getCoordinatesFromLocationName(selectedRoute.destination)
+      
+      if (originCoords && destCoords) {
+        progress = calculateTripProgress(
+          userLocation.latitude,
+          userLocation.longitude,
+          originCoords.latitude,
+          originCoords.longitude,
+          destCoords.latitude,
+          destCoords.longitude
+        )
+        status = getTripStatusMessage(
+          userLocation.latitude,
+          userLocation.longitude,
+          selectedRoute.origin,
+          selectedRoute.destination,
+          progress
+        )
+        setHasActiveTrip(true)
+      } else {
+        // Fallback si no tenemos coords
+        setHasActiveTrip(false)
+      }
+    }
+    
+    // Si no hay viaje o no tenemos coords, usar DEMO con animación visual
+    if (!selectedRoute || !progress) {
+      setHasActiveTrip(false)
+      // Simular progreso con animación: 0% → 100% → 0%
+      const demoProgress = Animated.loop(
+        Animated.sequence([
+          Animated.timing(new Animated.Value(0), {
+            toValue: 1,
+            duration: 3000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ])
+      )
+      return
+    }
+    
+    // Actualizar progreso si hay viaje activo
+    if (progress) {
+      setTripProgress(progress.progressPercent)
+      setLocationStatus(status)
+      
+      Animated.timing(realTripProgressAnim, {
+        toValue: progress.progressPercent / 100,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start()
+    }
+  }, [userLocation, realTripProgressAnim, selectedRoute])
+  
   const balance = useAppStore((state) => state.balance)
-  const setBalance = useAppStore((state) => state.setBalance)
   const user = useAppStore((state) => state.user)
+  const selectedRoute = useAppStore((state) => state.selectedRoute)
   const { loading: routesLoading, error: routesError, fetchRoutes } = useRoutes()
   useNotifications(user?.id)
   const notificationUnreadCount = useAppStore((state) => state.notificationUnreadCount)
   const showRoutesLoading = (isFetchingTopRoutes || routesLoading) && topRoutes.length === 0
   const showRoutesError = routesError && topRoutes.length === 0
-
-  const handleAddCredit = () => {
-    setBalance(balance + 10000)
-  }
+  const isDriver = user?.role === 'driver'
 
   const loadTopDrivers = useCallback(async () => {
     setIsFetchingTopRoutes(true)
@@ -66,26 +191,9 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      {/* Fondo con círculos decorativos 3D */}
+      {/* Fondo blanco puro */}
       <View style={styles.gradientBg}>
-        <LinearGradient
-          colors={[COLORS.primaryLight + '35', COLORS.primary + '18', COLORS.primaryDark + '08']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle1]}
-        />
-        <LinearGradient
-          colors={[COLORS.primaryLight + '28', COLORS.primary + '14', COLORS.primaryDark + '06']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle2]}
-        />
-        <LinearGradient
-          colors={[COLORS.primaryLight + '22', COLORS.primary + '12', COLORS.primaryDark + '04']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle3]}
-        />
+        <View style={styles.backgroundGradient} />
       </View>
 
       <ScrollView
@@ -94,57 +202,231 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={true}
       >
-        {/* Header */}
+        {/* Header - Empty Space */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.logo}>Trive</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.notificationBtn}
-            onPress={() => navigation.navigate('Notifications' as never)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="notifications-outline" size={24} color={COLORS.textPrimary} />
-            {notificationUnreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationCount}>{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerSpacer} />
         </View>
 
-        {/* Balance Card */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.balanceCard,
-            pressed && styles.balanceCardPressed,
-          ]}
-          onPress={handleAddCredit}
+        {/* Balance / Earnings Card */}
+        <View
+          style={[styles.balanceCard, { backgroundColor: '#E8F1FF' }]}
         >
-          <View style={styles.balanceCardBg} />
-          <View style={styles.balanceContent}>
-            <View style={styles.balanceLeft}>
-              <Text style={styles.balanceLabel}>Saldo disponible</Text>
-              <Text style={styles.balanceAmount}>${balance.toLocaleString('es-CO')}</Text>
+          {/* Card Content - Compact Layout */}
+          <View style={{ padding: SPACING.md, paddingVertical: SPACING.md }}>
+            {/* Header Row: Greeting + Notification Button */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 }}>
+                  <Text style={[styles.greeting, { color: '#1a1a1a', fontSize: 13 }]}>
+                    {getGreeting()},
+                  </Text>
+                  <Text style={{ 
+                    fontSize: 15, 
+                    fontWeight: '700', 
+                    color: COLORS.primary,
+                    marginLeft: 4
+                  }}>
+                    {user?.name ? user.name.split(' ')[0] : ''}
+                  </Text>
+                </View>
+                
+                {/* Role - Large & Prominent */}
+                <Text style={{ 
+                  fontSize: 28, 
+                  fontWeight: '800', 
+                  color: '#F5F5F5',
+                  lineHeight: 32
+                }}>
+                  {isDriver ? 'Conductor' : 'Pasajero'}
+                </Text>
+              </View>
+              
+              {/* Notification Button - Black Background */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginLeft: 8,
+                }}
+                onPress={() => navigation.navigate('Notifications' as never)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+                {notificationUnreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    backgroundColor: COLORS.error,
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>
+                      {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
-            <View style={styles.addBalanceBtn}>
-              <Ionicons name="add" size={20} color={COLORS.primary} />
-            </View>
-          </View>
-          <View style={styles.balanceFooter}>
-            <View style={styles.balanceChip}>
-              <Text style={styles.balanceChipText}>TRIVE</Text>
-            </View>
-            <View style={styles.balanceInfo}>
-              <Text style={styles.balanceCardNumber}>•••• •••• •••• 4523</Text>
-              <View style={styles.balanceVerified}>
-                <Ionicons name="checkmark-circle" size={11} color={COLORS.textInverse} />
-                <Text style={styles.balanceVerifiedText}>Verificado</Text>
+            
+            {/* Transport Visualization + Amount Row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
+              
+              {/* Left: Transport Animation - Expanded Horizontally */}
+              <View style={{
+                width: 240,
+                height: 90,
+                backgroundColor: 'rgba(21, 74, 168, 0.08)',
+                borderRadius: 14,
+                justifyContent: 'center',
+                alignItems: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                {/* ANIMACIÓN PRINCIPAL: LÍNEA HORIZONTAL CON PROGRESO */}
+                <>
+                  {/* Línea de progreso completa (background) */}
+                  <View style={{
+                    position: 'absolute',
+                    width: '90%',
+                    height: 3,
+                    backgroundColor: '#E0E0E0',
+                    borderRadius: 1.5,
+                    left: '5%',
+                  }} />
+                  
+                  {/* Línea de progreso real (foreground) */}
+                  <Animated.View
+                    style={{
+                      position: 'absolute',
+                      height: 3,
+                      backgroundColor: hasActiveTrip ? '#10B981' : '#3B82F6',
+                      borderRadius: 1.5,
+                      left: '5%',
+                      width: realTripProgressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '90%'],
+                      }),
+                    }}
+                  />
+                  
+                  {/* Punto origen - Verde */}
+                  <View style={{
+                    position: 'absolute',
+                    left: '5%',
+                    width: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    backgroundColor: '#10B981',
+                    borderWidth: 3,
+                    borderColor: '#fff',
+                    zIndex: 2,
+                  }} />
+                  
+                  {/* Punto destino - Rojo */}
+                  <View style={{
+                    position: 'absolute',
+                    right: '5%',
+                    width: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    backgroundColor: '#EF4444',
+                    borderWidth: 3,
+                    borderColor: '#fff',
+                    zIndex: 2,
+                  }} />
+                  
+                  {/* Carro animado según progreso */}
+                  <Animated.View
+                    style={{
+                      position: 'absolute',
+                      zIndex: 3,
+                      transform: [
+                        {
+                          translateX: realTripProgressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [6, 220],
+                          }),
+                        },
+                        {
+                          translateY: 0,
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="car-sport" size={24} color={hasActiveTrip ? '#154AA8' : '#3B82F6'} />
+                  </Animated.View>
+                  
+                  {/* Información de progreso en la parte inferior */}
+                  <Text style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: hasActiveTrip ? '#154AA8' : '#666',
+                    backgroundColor: hasActiveTrip ? '#E8F1FF' : '#F0F0F0',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 8,
+                  }}>
+                    {hasActiveTrip ? `${tripProgress.toFixed(0)}%` : 'Demo'}
+                  </Text>
+                </>
+                {/* Fin animación principal */}
+              </View>
+              
+              {/* Right: Amount & Subtitle */}
+              <View style={{ alignItems: 'flex-end', flex: 1, marginLeft: SPACING.md }}>
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontWeight: '800', 
+                  color: '#1a1a1a',
+                  letterSpacing: -0.5
+                }}>
+                  ${(isDriver ? user?.earnings ?? 0 : user?.spent ?? 0).toLocaleString('es-CO')}
+                </Text>
+                <Text style={{ 
+                  fontSize: 10, 
+                  fontWeight: '400', 
+                  color: '#1a1a1a' + '75',
+                  marginTop: 1
+                }}>
+                  {isDriver ? 'Ganancias' : 'Gastado'}
+                </Text>
               </View>
             </View>
+            
+            {/* Location Status - Si hay viaje activo */}
+            {hasActiveTrip && locationStatus && (
+              <View style={{ marginTop: 12, paddingHorizontal: 0 }}>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '600',
+                  color: '#154AA8',
+                  textAlign: 'center',
+                  backgroundColor: '#E8F1FF',
+                  paddingVertical: 6,
+                  paddingHorizontal: 8,
+                  borderRadius: 8,
+                }}>
+                  📍 {locationStatus}
+                </Text>
+              </View>
+            )}
+            
+            {/* TRIVE Chip - Bottom Left */}
+            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start' }]}>
+              <Text style={[styles.balanceChipText, { color: COLORS.textInverse }]}>TRIVE</Text>
+            </View>
           </View>
-        </Pressable>
+        </View>
 
         {/* Search Section */}
         <View style={styles.searchSection}>
@@ -231,7 +513,11 @@ export default function HomeScreen() {
                     <Ionicons
                       name={icons[type] as any}
                       size={18}
-                      color={isActive ? COLORS.textInverse : COLORS.primary}
+                      color={(() => {
+                        if (type === 'taxi') return '#FFD700';
+                        if (type === 'auto' || type === 'busetica' || type === 'buseta') return '#154AA8';
+                        return '#154AA8';
+                      })()}
                     />
                   </View>
                   <Text style={[styles.transportLabel, isActive && styles.transportLabelActive]} numberOfLines={1}>
@@ -249,8 +535,8 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('ScheduledTrips' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primary + '20' }]}> 
-              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}> 
+              <Ionicons name="calendar-outline" size={18} color="#154AA8" />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Mis viajes</Text>
           </TouchableOpacity>
@@ -258,8 +544,8 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('GroupTrips' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.accent + '20' }]}>
-              <Ionicons name="people-outline" size={18} color={COLORS.accent} />
+            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
+              <Ionicons name="people-outline" size={18} color="#154AA8" />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Grupal</Text>
           </TouchableOpacity>
@@ -267,7 +553,7 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('FavoriteRoutes' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.success + '20' }]}>
+            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
               <Ionicons name="heart-outline" size={18} color={COLORS.success} />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Favoritos</Text>
@@ -276,7 +562,7 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('TripHistory' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.warning + '20' }]}>
+            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
               <Ionicons name="receipt-outline" size={18} color={COLORS.warning} />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Historial</Text>
@@ -285,8 +571,8 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('Chat' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primary + '20' }]}> 
-              <Ionicons name="chatbubble-outline" size={18} color={COLORS.primary} />
+            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}> 
+              <Ionicons name="chatbubble-outline" size={18} color="#154AA8" />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Mensajes</Text>
           </TouchableOpacity>
@@ -332,9 +618,9 @@ export default function HomeScreen() {
                 }
               >
                 <LinearGradient
-                  colors={[COLORS.primary, COLORS.primary + 'CC']}
+                  colors={[COLORS.primaryDark, COLORS.primary, COLORS.primaryDark]}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  end={{ x: 1.2, y: 1.2 }}
                   style={styles.homeRouteCardGradient}
                 >
                   <View style={styles.homeRouteTop}>
@@ -356,7 +642,7 @@ export default function HomeScreen() {
 
                   <View style={styles.homeRouteMiddle}>
                     <View style={styles.homeRouteDetailItem}>
-                      <Ionicons name="calendar-outline" size={14} color="#fff" />
+                      <Ionicons name="calendar-outline" size={14} color={COLORS.textInverse} />
                       <Text style={styles.homeRouteDetailText}>
                         {new Date(route.departure_time).toLocaleDateString('es-CO', {
                           day: 'numeric',
@@ -365,7 +651,7 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                     <View style={styles.homeRouteDetailItem}>
-                      <Ionicons name="cash-outline" size={14} color="#fff" />
+                      <Ionicons name="cash-outline" size={14} color={COLORS.textInverse} />
                       <Text style={styles.homeRouteDetailText}>
                         ${route.price_per_seat.toLocaleString('es-CO')}
                       </Text>
@@ -435,27 +721,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  gradientCircle: {
+  backgroundGradient: {
     position: 'absolute',
-    borderRadius: 9999,
-  },
-  gradientCircle1: {
-    top: -80,
-    right: -60,
-    width: 280,
-    height: 280,
-  },
-  gradientCircle2: {
-    top: 200,
-    left: -120,
-    width: 360,
-    height: 360,
-  },
-  gradientCircle3: {
-    top: 480,
-    right: -80,
-    width: 240,
-    height: 240,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
   },
 
   container: {
@@ -474,9 +746,12 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
   },
+  headerSpacer: {
+    flex: 1,
+  },
   greeting: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 18,
+    fontWeight: '600',
     color: COLORS.textSecondary,
     marginBottom: 2,
   },
@@ -518,59 +793,31 @@ const styles = StyleSheet.create({
   },
 
   // Balance Card
+  // Balance Card
   balanceCard: {
     marginHorizontal: SPACING.lg,
     marginBottom: SPACING.xl,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 20,
-  },
-  balanceCardPressed: {
-    transform: [{ scale: 0.98 }],
-    shadowOpacity: 0.2,
-  },
-  balanceCardBg: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.primary,
-  },
-  balanceContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: SPACING.lg,
-    paddingTop: 24,
-  },
-  balanceLeft: {
-    flex: 1,
+    backgroundColor: '#E8F1FF',
+    borderWidth: 0,
+    shadowColor: '#154AA8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
   },
   balanceLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.textInverse + '85',
+    color: '#1a1a1a' + '85',
     marginBottom: 4,
   },
   balanceAmount: {
     fontSize: 32,
     fontWeight: '800',
-    color: COLORS.textInverse,
+    color: '#1a1a1a',
     letterSpacing: -1,
-  },
-  addBalanceBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
   },
   balanceFooter: {
     flexDirection: 'row',
@@ -580,7 +827,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   balanceChip: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
@@ -588,28 +835,8 @@ const styles = StyleSheet.create({
   balanceChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.textInverse,
     letterSpacing: 1,
-  },
-  balanceInfo: {
-    flex: 1,
-  },
-  balanceCardNumber: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.textInverse + '85',
-    letterSpacing: 2,
-  },
-  balanceVerified: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  balanceVerifiedText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.textInverse + '75',
   },
 
   // Search Section
@@ -707,9 +934,9 @@ const styles = StyleSheet.create({
     gap: 8,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 8,
   },
   searchBtnDisabled: {
     backgroundColor: COLORS.surfaceAlt,
@@ -737,23 +964,25 @@ const styles = StyleSheet.create({
   transportItem: {
     flex: 1,
     minWidth: 60,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#E8F1FF',
     borderRadius: 14,
     padding: 10,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowColor: '#154AA8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
     elevation: 8,
   },
   transportItemActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#E8F1FF',
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 15,
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   transportIcon: {
     width: 32,
@@ -763,21 +992,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary + '40',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   transportIconActive: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: 'transparent',
     borderColor: 'transparent',
   },
   transportLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: '#1a1a1a',
     textAlign: 'center',
   },
   transportLabelActive: {
-    color: COLORS.textInverse,
+    color: '#1a1a1a',
   },
 
   // Quick Actions
@@ -789,15 +1018,15 @@ const styles = StyleSheet.create({
   },
   quickActionItem: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#E8F1FF',
     borderRadius: 12,
     padding: 10,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: '#154AA8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 10,
   },
   quickActionIcon: {
     width: 34,
@@ -810,7 +1039,7 @@ const styles = StyleSheet.create({
   quickActionText: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: '#1a1a1a',
     textAlign: 'center',
   },
 
@@ -863,9 +1092,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 12,
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
   },
   routeTop: {
     flexDirection: 'row',
@@ -989,14 +1218,22 @@ const styles = StyleSheet.create({
 
   // Home Route Cards - Gradient Style
   homeRouteCardWrapper: {
-    marginBottom: SPACING.md,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    ...SHADOWS.md,
+    backgroundColor: COLORS.primaryDark,
+    borderTopWidth: 1,
+    borderTopColor: '#FFFFFF' + '15',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 15,
   },
   homeRouteCardGradient: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.lg,
   },
   homeRouteTop: {
     flexDirection: 'row',
@@ -1024,13 +1261,13 @@ const styles = StyleSheet.create({
   },
   homeRouteText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '700',
     flexShrink: 1,
   },
   homeRouteTextSecondary: {
     ...TYPOGRAPHY.caption,
-    color: 'rgba(255,255,255,0.85)',
+    color: COLORS.textInverse + 'DD',
     marginTop: 2,
     flexShrink: 1,
   },
@@ -1055,12 +1292,12 @@ const styles = StyleSheet.create({
   },
   homeRouteDetailText: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '600',
   },
   homeRouteDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     marginVertical: SPACING.sm,
   },
   homeRouteBottom: {
@@ -1078,13 +1315,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   homeDriverInitials: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '700',
   },
   homeDriverDetails: {
@@ -1092,7 +1329,7 @@ const styles = StyleSheet.create({
   },
   homeDriverName: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '600',
   },
   homeRatingBadge: {
@@ -1103,7 +1340,7 @@ const styles = StyleSheet.create({
   },
   homeRatingText: {
     ...TYPOGRAPHY.label,
-    color: COLORS.accent,
+    color: COLORS.textInverse,
     fontWeight: '600',
     fontSize: 10,
   },
@@ -1111,14 +1348,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: RADIUS.md,
   },
   homeSeatsText: {
     ...TYPOGRAPHY.label,
-    color: '#fff',
+    color: COLORS.textInverse,
     fontWeight: '600',
     fontSize: 12,
   },

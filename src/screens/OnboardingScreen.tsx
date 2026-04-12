@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 
@@ -20,7 +20,7 @@ interface OnboardingSlide {
   id: string
   title: string
   description: string
-  icon: keyof typeof Ionicons.glyphMap
+  icon: keyof typeof MaterialCommunityIcons.glyphMap
   bgColor: string
   iconColor: string
 }
@@ -30,32 +30,32 @@ const slides: OnboardingSlide[] = [
     id: '1',
     title: 'Viaja con Trive',
     description: 'Encuentra rutas cercanas a ti de forma rápida y segura. Conduce con conductores verificados.',
-    icon: 'car-sport',
-    bgColor: '#E8F0FE',
+    icon: 'steering',
+    bgColor: 'rgba(232, 240, 254, 0.45)',
     iconColor: COLORS.primary,
   },
   {
     id: '2',
     title: 'Reserva tu asiento',
     description: 'Selecciona el número de asientos que necesitas y viaja cómodo con otros pasajeros.',
-    icon: 'people',
-    bgColor: '#E3F2FD',
+    icon: 'seat-recline-normal',
+    bgColor: 'rgba(227, 242, 253, 0.45)',
     iconColor: COLORS.accent,
   },
   {
     id: '3',
     title: 'Pago seguro',
     description: 'Paga de forma segura desde la app. Sin efectivo, sin complicaciones.',
-    icon: 'card',
-    bgColor: '#E8F5E9',
+    icon: 'shield-check',
+    bgColor: 'rgba(232, 245, 233, 0.45)',
     iconColor: '#10B981',
   },
   {
     id: '4',
     title: 'Califica tu viaje',
     description: 'Ayúdanos a mejorar calificando a los conductores y manteniendo la calidad del servicio.',
-    icon: 'star',
-    bgColor: '#FFF3E0',
+    icon: 'star-circle',
+    bgColor: 'rgba(255, 243, 224, 0.45)',
     iconColor: '#F59E0B',
   },
 ]
@@ -105,69 +105,63 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const renderSlide = (slide: OnboardingSlide, index: number) => {
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width]
 
-    // Animaciones para el contenedor del ícono
     const scale = scrollX.interpolate({
       inputRange,
-      outputRange: [0.6, 1, 0.6],
+      outputRange: [0.8, 1, 0.8],
       extrapolate: 'clamp',
     })
 
     const rotate = scrollX.interpolate({
       inputRange,
-      outputRange: ['-15deg', '0deg', '15deg'],
+      outputRange: ['-8deg', '0deg', '8deg'],
       extrapolate: 'clamp',
     })
 
-    // Animaciones para el texto
     const textOpacity = scrollX.interpolate({
       inputRange,
-      outputRange: [0, 1, 0],
+      outputRange: [0.2, 1, 0.2],
       extrapolate: 'clamp',
     })
 
     const textTranslateY = scrollX.interpolate({
       inputRange,
-      outputRange: [50, 0, -50],
+      outputRange: [30, 0, -30],
       extrapolate: 'clamp',
     })
 
     return (
       <View key={slide.id} style={styles.slide}>
-        {/* Círculo decorativo de fondo */}
-        <View style={[styles.decorCircle, { backgroundColor: slide.bgColor }]} />
+        <View style={styles.cardWrapper}>
+          <View style={styles.cardHeader}>
+            <Animated.View
+              style={[
+                styles.iconContainer,
+                {
+                  backgroundColor: slide.bgColor,
+                  transform: [{ scale }, { rotate }],
+                },
+              ]}
+            >
+              <MaterialCommunityIcons name={slide.icon} size={58} color={slide.iconColor} />
+            </Animated.View>
+            <View style={styles.cardLabel}>
+              <Text style={styles.cardLabelText}>Paso {index + 1}</Text>
+            </View>
+          </View>
 
-        {/* Ícono principal con animación */}
-        <Animated.View
-          style={[
-            styles.iconContainer,
-            {
-              backgroundColor: slide.bgColor,
-              transform: [{ scale }, { rotate }],
-            },
-          ]}
-        >
-          <Ionicons name={slide.icon} size={100} color={slide.iconColor} />
-        </Animated.View>
-
-        {/* Círculos decorativos pequeños */}
-        <View style={[styles.decorSmall1, { backgroundColor: slide.bgColor }]} />
-        <View style={[styles.decorSmall2, { backgroundColor: slide.bgColor }]} />
-
-        {/* Textos con animación */}
-        <Animated.View
-          style={[
-            styles.textContainer,
-            {
-              opacity: textOpacity,
-              transform: [{ translateY: textTranslateY }],
-            },
-          ]}
-        >
-          <Text style={[styles.slideTitle, { color: COLORS.textPrimary }]}>
-            {slide.title}
-          </Text>
-          <Text style={styles.slideDescription}>{slide.description}</Text>
-        </Animated.View>
+          <Animated.View
+            style={[
+              styles.textContainer,
+              {
+                opacity: textOpacity,
+                transform: [{ translateY: textTranslateY }],
+              },
+            ]}
+          >
+            <Text style={styles.slideTitle}>{slide.title}</Text>
+            <Text style={styles.slideDescription}>{slide.description}</Text>
+          </Animated.View>
+        </View>
       </View>
     )
   }
@@ -218,35 +212,24 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primaryDarkest} />
 
-      {/* Fondo con círculos decorativos 3D */}
+      {/* Fondo con gradiente profundo e inspirador */}
       <View style={styles.bgContainer}>
         <LinearGradient
-          colors={[COLORS.primaryLight + '32', COLORS.primary + '16', COLORS.primaryDark + '06']}
+          colors={['#082D66', '#154AA8', '#2E7DC0', '#5A9FD4']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle1]}
-        />
-        <LinearGradient
-          colors={[COLORS.primaryLight + '25', COLORS.primary + '12', COLORS.primaryDark + '04']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle2]}
+          style={styles.backgroundGradient}
         />
       </View>
 
-      {/* Header */}
       <View style={styles.header}>
-        {/* Espaciador para centrar */}
-        <View style={{ width: 60 }} />
-
-        {/* Título superior */}
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Trive</Text>
+        <View>
+          <Text style={styles.headerTitle}>Bienvenido a Trive</Text>
+          <Text style={styles.headerSubtitle}>Viajes compartidos profesionales y seguros.</Text>
         </View>
 
-        {/* Botón saltar */}
         <TouchableOpacity
           onPress={handleSkip}
           style={styles.skipBtn}
@@ -256,6 +239,22 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             {isLastSlide ? '' : 'Omitir'}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground} />
+        <Animated.View
+          style={[
+            styles.progressBarFill,
+            {
+              width: scrollX.interpolate({
+                inputRange: [0, (slides.length - 1) * width],
+                outputRange: ['25%', '100%'],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+        />
       </View>
 
       {/* Slides */}
@@ -323,9 +322,9 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primaryDarkest,
   },
-  // Fondo con círculos decorativos 3D
+  // Fondo con gradiente profundo
   bgContainer: {
     position: 'absolute',
     top: 0,
@@ -333,21 +332,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  gradientCircle: {
+  backgroundGradient: {
     position: 'absolute',
-    borderRadius: 9999,
-  },
-  gradientCircle1: {
-    top: -120,
-    right: -100,
-    width: 320,
-    height: 320,
-  },
-  gradientCircle2: {
-    bottom: -100,
-    left: -100,
-    width: 300,
-    height: 300,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   header: {
     flexDirection: 'row',
@@ -359,20 +349,24 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   headerTitle: {
     ...TYPOGRAPHY.h4,
-    color: COLORS.primary,
-    fontWeight: '700',
+    color: COLORS.textInverse,
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: SPACING.xs,
   },
   skipBtn: {
-    width: 60,
-    alignItems: 'flex-end',
+    padding: SPACING.sm,
   },
   skipText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textSecondary,
+    color: COLORS.textInverse,
   },
   scrollView: {
     flex: 1,
@@ -381,104 +375,128 @@ const styles = StyleSheet.create({
     width,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
-  decorCircle: {
-    position: 'absolute',
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    top: '10%',
-    opacity: 0.5,
+  cardWrapper: {
+    width: width * 0.82,
+    backgroundColor: '#E8F1FF',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.deep,
+    borderWidth: 0,
+    borderColor: 'rgba(255,255,255,0.9)',
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+  },
+  cardLabel: {
+    backgroundColor: 'rgba(15,15,15,0.05)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  cardLabelText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
   },
   iconContainer: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 90,
+    height: 90,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    ...SHADOWS.lg,
-  },
-  decorSmall1: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    top: '25%',
-    right: '15%',
-    opacity: 0.4,
-  },
-  decorSmall2: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    bottom: '35%',
-    left: '12%',
-    opacity: 0.3,
+    ...SHADOWS.orangeSoft,
   },
   textContainer: {
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.xxxl,
+    width: '100%',
+    alignItems: 'flex-start',
   },
   slideTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
     fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-    letterSpacing: -0.5,
+    textAlign: 'left',
+    marginBottom: SPACING.sm,
   },
   slideDescription: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 26,
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 10,
+    marginBottom: SPACING.lg,
+    justifyContent: 'center',
     paddingHorizontal: SPACING.lg,
+  },
+  progressBarBackground: {
+    position: 'absolute',
+    width: '100%',
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  progressBarFill: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.textInverse,
   },
   footer: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxxl + 20,
+    paddingBottom: SPACING.xxxl + 12,
     paddingTop: SPACING.lg,
     alignItems: 'center',
+    width: '100%',
   },
   pageIndicator: {
     flexDirection: 'row',
+    justifyContent: 'center',
     marginBottom: SPACING.lg,
     gap: SPACING.sm,
   },
   pageNumber: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textTertiary,
+    color: 'rgba(255,255,255,0.65)',
     marginHorizontal: SPACING.xs,
   },
   pageNumberActive: {
-    color: COLORS.primary,
-    fontSize: 16,
+    color: COLORS.textInverse,
+    fontSize: 14,
   },
   pagination: {
     flexDirection: 'row',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
+    gap: SPACING.sm,
   },
   dot: {
-    height: 10,
-    borderRadius: 5,
-    marginHorizontal: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: SPACING.xs,
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.md + 2,
+    backgroundColor: '#E8F1FF',
+    borderRadius: RADIUS.xl,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xxxl,
     gap: SPACING.sm,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
     width: '100%',
-    ...SHADOWS.sm,
+    ...SHADOWS.deep,
   },
   nextBtnText: {
     fontSize: 16,
@@ -487,7 +505,6 @@ const styles = StyleSheet.create({
   },
   getStartedBtn: {
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
   },
   getStartedBtnText: {
     color: '#fff',

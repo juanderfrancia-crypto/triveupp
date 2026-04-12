@@ -6,9 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../hooks/useAuth'
 import { useChat } from '../hooks/useChat'
 import { ChatBubble } from '../components/ChatBubble'
@@ -19,6 +19,7 @@ const ChatScreen = ({ navigation }: any) => {
   const route = useRoute<any>()
   const {
     conversations,
+    contacts,
     unreadCount,
     loadConversation,
     currentOtherUserId,
@@ -160,6 +161,17 @@ const ChatScreen = ({ navigation }: any) => {
       textAlign: 'center',
       backgroundColor: '#ffe6e6',
     },
+    contactsSection: {
+      paddingHorizontal: 16,
+      paddingBottom: 24,
+      marginTop: 16,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      marginBottom: 12,
+      color: '#333',
+    },
   })
 
   // VISTA 1: LISTA DE CONVERSACIONES
@@ -174,6 +186,24 @@ const ChatScreen = ({ navigation }: any) => {
             </View>
           </View>
         </View>
+
+        {contacts.length > 0 && (
+          <View style={styles.contactsSection}>
+            <Text style={styles.sectionTitle}>Iniciar nuevo chat</Text>
+            {contacts.map((contact) => (
+              <TouchableOpacity
+                key={contact.user_id}
+                style={styles.conversationItem}
+                onPress={() => loadConversation(contact.user_id)}
+              >
+                <Text style={styles.conversationName}>{contact.name}</Text>
+                <Text style={styles.conversationPreview} numberOfLines={1}>
+                  {contact.description}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         <FlatList
           data={conversations}
@@ -194,8 +224,8 @@ const ChatScreen = ({ navigation }: any) => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No hay conversaciones aún</Text>
-              <Text style={{ color: '#999', fontSize: 12, marginTop: 8 }}>
-                Selecciona una conversación existente para empezar a chatear.
+              <Text style={{ color: '#999', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                Aquí puedes iniciar un chat con conductores o pasajeros de tus viajes recientes.
               </Text>
             </View>
           }

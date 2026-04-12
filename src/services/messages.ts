@@ -21,6 +21,118 @@ export interface Conversation {
   unread_count: number
 }
 
+export interface ChatContact {
+  user_id: string
+  name: string
+  avatar_url?: string | null
+  relation: 'driver' | 'passenger'
+  description: string
+}
+
+// ============================================
+// OBTENER CONTACTOS DE CHAT A PARTIR DE TUS VIAJES
+// ============================================
+
+export const getChatContactsForUser = async (userId: string): Promise<ChatContact[]> => {
+  try {
+    const contactsMap = new Map<string, ChatContact>()
+
+    // 1. Si soy pasajero, obtengo los conductores de mis bookings.
+    const { data: passengerBookings, error: passengerBookingsError } = await supabase
+      .from('bookings')
+      .select('route_id')
+      .eq('passenger_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (passengerBookingsError) throw passengerBookingsError
+
+    const passengerRouteIds = Array.from(new Set((passengerBookings || []).map((booking) => booking.route_id)))
+    if (passengerRouteIds.length > 0) {
+      const { data: routes, error: routesError } = await supabase
+        .from('routes')
+        .select('id, driver_id, driver_name, origin, destination, departure_time')
+        .in('id', passengerRouteIds)
+
+      if (routes && routes.length > 0) {
+        const driverIds = Array.from(new Set(routes.map((route) => route.driver_id).filter(Boolean)))
+        const { data: drivers, error: driverProfilesError } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url')
+          .in('id', driverIds)
+
+        if (driverProfilesError) throw driverProfilesError
+
+        const driverMap = new Map((drivers || []).map((driver) => [driver.id, driver]))
+
+        for (const route of routes) {
+          if (!route.driver_id) continue
+          const driver = driverMap.get(route.driver_id)
+          if (!driver) continue
+
+          if (!contactsMap.has(driver.id)) {
+            contactsMap.set(driver.id, {
+              user_id: driver.id,
+              name: driver.name || route.driver_name || 'Conductor',
+              avatar_url: driver.avatar_url,
+              relation: 'driver',
+              description: `Conductor de ${route.origin} → ${route.destination}`,
+            })
+          }
+        }
+      }
+    }
+
+    // 2. Si soy conductor, obtengo los pasajeros de mis rutas.
+    const { data: myRoutes, error: myRoutesError } = await supabase
+      .from('routes')
+      .select('id')
+      .eq('driver_id', userId)
+      .limit(50)
+
+    if (myRoutesError) throw myRoutesError
+
+    const driverRouteIds = Array.from(new Set((myRoutes || []).map((route) => route.id)))
+    if (driverRouteIds.length > 0) {
+      const { data: driverBookings, error: driverBookingsError } = await supabase
+        .from('bookings')
+        .select('passenger_id')
+        .in('route_id', driverRouteIds)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (driverBookingsError) throw driverBookingsError
+
+      const passengerIds = Array.from(new Set((driverBookings || []).map((booking) => booking.passenger_id).filter(Boolean)))
+      if (passengerIds.length > 0) {
+        const { data: passengers, error: passengerProfilesError } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url')
+          .in('id', passengerIds)
+
+        if (passengerProfilesError) throw passengerProfilesError
+
+        for (const passenger of passengers || []) {
+          if (!contactsMap.has(passenger.id)) {
+            contactsMap.set(passenger.id, {
+              user_id: passenger.id,
+              name: passenger.name || 'Pasajero',
+              avatar_url: passenger.avatar_url,
+              relation: 'passenger',
+              description: 'Pasajero de tus viajes recientes',
+            })
+          }
+        }
+      }
+    }
+
+    return Array.from(contactsMap.values()).slice(0, 20)
+  } catch (err: any) {
+    console.error('Error fetching chat contacts:', err)
+    throw err
+  }
+}
+
 // ============================================
 // OBTENER LISTA DE CONVERSACIONES
 // ============================================

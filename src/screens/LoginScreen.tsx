@@ -14,7 +14,8 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { LinearGradient } from 'expo-linear-gradient'
+import { COLORS, TYPOGRAPHY, SPACING } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 
@@ -139,14 +140,15 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.safeContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDarkest} />
 
-      {/* Fondo con círculos decorativos */}
-      <View style={styles.gradientBg}>
-        <View style={styles.gradientCircle1} />
-        <View style={styles.gradientCircle2} />
-        <View style={styles.gradientCircle3} />
-      </View>
+      {/* Fondo degradado profundo e inspirador */}
+      <LinearGradient
+        colors={['#082D66', '#154AA8', '#2E7DC0', '#5A9FD4']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBg}
+      />
 
       <KeyboardAvoidingView
         style={styles.container}
@@ -301,7 +303,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primaryDarkest,
   },
   gradientBg: {
     position: 'absolute',
@@ -309,36 +311,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  gradientCircle1: {
-    position: 'absolute',
-    top: -60,
-    right: -40,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: COLORS.primary,
-    opacity: 0.12,
-  },
-  gradientCircle2: {
-    position: 'absolute',
-    top: 200,
-    left: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: COLORS.primary,
-    opacity: 0.08,
-  },
-  gradientCircle3: {
-    position: 'absolute',
-    top: 450,
-    right: -50,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: COLORS.accent,
-    opacity: 0.06,
   },
   container: {
     flex: 1,
@@ -358,25 +330,28 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 32,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.textInverse,
     letterSpacing: -0.5,
     marginBottom: 4,
   },
   subtitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
   },
 
   // Card
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 20,
     padding: SPACING.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
   },
   welcomeText: {
     ...TYPOGRAPHY.h4,
@@ -496,11 +471,11 @@ const styles = StyleSheet.create({
   },
   footerText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    color: 'rgba(255,255,255,0.85)',
   },
   footerLink: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.primary,
+    color: COLORS.accentLight,
     fontWeight: '600',
   },
 })
