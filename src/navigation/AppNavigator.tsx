@@ -40,6 +40,7 @@ import HelpScreen from '../screens/HelpScreen'
 import LanguageScreen from '../screens/LanguageScreen'
 import LearningCenterScreen from '../screens/LearningCenterScreen'
 import BugReportScreen from '../screens/BugReportScreen'
+import AvailableRidesScreen from '../screens/AvailableRidesScreen'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 
@@ -89,6 +90,7 @@ export default function AppNavigator() {
 
         {isUserAuthenticated && (
           <>
+            <Stack.Screen name="AvailableRides" component={AvailableRidesScreen} />
             <Stack.Screen name="SeatSelection" component={SeatSelectionScreen} />
             <Stack.Screen name="Booking" component={BookingScreen} />
             <Stack.Screen name="TripStatus" component={TripStatusScreen} />

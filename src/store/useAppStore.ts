@@ -12,6 +12,9 @@ export interface AppUser {
   is_admin?: boolean
   spent?: number
   earnings?: number
+  balance?: number
+  membership_type?: 'free' | 'basic' | 'premium' | 'vip'
+  membership_expiry?: string | null
 }
 
 interface AppState {

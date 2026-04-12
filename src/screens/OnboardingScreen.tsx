@@ -212,12 +212,12 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primaryDarkest} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Fondo con gradiente profundo e inspirador */}
+      {/* Fondo limpio sin gradiente azul */}
       <View style={styles.bgContainer}>
         <LinearGradient
-          colors={['#082D66', '#154AA8', '#2E7DC0', '#5A9FD4']}
+          colors={['#FFFFFF', '#F9FAFB', '#F3F4F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.backgroundGradient}
@@ -322,7 +322,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primaryDarkest,
+    backgroundColor: '#FFFFFF',
   },
   // Fondo con gradiente profundo
   bgContainer: {
@@ -353,12 +353,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h4,
-    color: COLORS.textInverse,
+    color: '#1a1a1a',
     fontWeight: '800',
   },
   headerSubtitle: {
     ...TYPOGRAPHY.bodyMedium,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666666',
     marginTop: SPACING.xs,
   },
   skipBtn: {
@@ -366,7 +366,8 @@ const styles = StyleSheet.create({
   },
   skipText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -379,14 +380,14 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     width: width * 0.82,
-    backgroundColor: '#E8F1FF',
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     alignItems: 'center',
     justifyContent: 'center',
     ...SHADOWS.deep,
-    borderWidth: 0,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
   cardHeader: {
@@ -444,12 +445,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#E5E7EB',
   },
   progressBarFill: {
     height: 10,
     borderRadius: 999,
-    backgroundColor: COLORS.textInverse,
+    backgroundColor: COLORS.primary,
   },
   footer: {
     paddingHorizontal: SPACING.lg,
@@ -467,12 +468,13 @@ const styles = StyleSheet.create({
   pageNumber: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
+    color: '#D1D5DB',
     marginHorizontal: SPACING.xs,
   },
   pageNumberActive: {
-    color: COLORS.textInverse,
+    color: COLORS.primary,
     fontSize: 14,
+    fontWeight: '700',
   },
   pagination: {
     flexDirection: 'row',
@@ -484,13 +486,13 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     marginHorizontal: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#D1D5DB',
   },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E8F1FF',
+    backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xxxl,
@@ -501,7 +503,7 @@ const styles = StyleSheet.create({
   nextBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: '#FFFFFF',
   },
   getStartedBtn: {
     backgroundColor: COLORS.primary,

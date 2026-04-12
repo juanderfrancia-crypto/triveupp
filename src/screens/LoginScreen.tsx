@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -65,6 +66,9 @@ export default function LoginScreen() {
             phone: profile.phone,
             role: profile.role,
             rating: profile.rating,
+            balance: profile.balance || 0,
+            membership_type: profile.membership_type || 'free',
+            membership_expiry: profile.membership_expiry,
           })
         }
         setAuthUser(data.user)
@@ -105,6 +109,9 @@ export default function LoginScreen() {
             phone: profile.phone,
             role: profile.role,
             rating: profile.rating,
+            balance: profile.balance || 0,
+            membership_type: profile.membership_type || 'free',
+            membership_expiry: profile.membership_expiry,
           })
         } else {
           const appleEmail = data.user.email || `user_${data.user.id}@apple.local`
@@ -125,6 +132,8 @@ export default function LoginScreen() {
             phone: '',
             role: 'passenger',
             rating: 0,
+            membership_type: 'free',
+            membership_expiry: null,
           })
         }
         setAuthUser(data.user)
@@ -140,11 +149,11 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.safeContainer}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDarkest} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Fondo degradado profundo e inspirador */}
+      {/* Fondo limpio sin gradiente azul */}
       <LinearGradient
-        colors={['#082D66', '#154AA8', '#2E7DC0', '#5A9FD4']}
+        colors={['#FFFFFF', '#F9FAFB', '#F3F4F6']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientBg}
@@ -157,7 +166,11 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>Trive</Text>
+            <Image 
+              source={require('../../assets/logo.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
           </View>
 
@@ -303,7 +316,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: COLORS.primaryDarkest,
+    backgroundColor: '#FFFFFF',
   },
   gradientBg: {
     position: 'absolute',
@@ -323,20 +336,18 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    paddingTop: 80,
+    paddingTop: 40,
     paddingBottom: SPACING.xl,
     alignItems: 'center',
   },
-  logo: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: COLORS.textInverse,
-    letterSpacing: -0.5,
-    marginBottom: 4,
+  logoImage: {
+    width: 400,
+    height: 160,
+    marginBottom: 12,
   },
   subtitle: {
     ...TYPOGRAPHY.body,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#666666',
     textAlign: 'center',
   },
 
@@ -471,7 +482,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     ...TYPOGRAPHY.body,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#666666',
   },
   footerLink: {
     ...TYPOGRAPHY.bodyMedium,

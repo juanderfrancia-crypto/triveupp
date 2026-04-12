@@ -37,11 +37,10 @@ const getGreeting = () => {
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>()
-  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>('auto')
+  const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
   const [topRoutes, setTopRoutes] = useState<Route[]>([])
   const [isFetchingTopRoutes, setIsFetchingTopRoutes] = useState(false)
-  const [animationType, setAnimationType] = useState<'car' | 'map'>('car')
   
   // Estado del progreso del viaje real
   const [tripProgress, setTripProgress] = useState<number>(0)
@@ -54,44 +53,8 @@ export default function HomeScreen() {
   // Animación del carro
   const carPositionAnim = useRef(new Animated.Value(0)).current
   const realTripProgressAnim = useRef(new Animated.Value(0)).current
-  const mapOpacityAnim = useRef(new Animated.Value(0)).current
   
-  // Iniciar animación DEMO (cuando no hay viaje activo)
-  useEffect(() => {
-    if (hasActiveTrip) {
-      // Si hay viaje activo, no usar demo
-      return
-    }
-    
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(carPositionAnim, {
-          toValue: 1,
-          duration: 3000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(carPositionAnim, {
-          toValue: 0,
-          duration: 1500,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start()
-  }, [carPositionAnim, hasActiveTrip])
-  
-  // Cambiar tipo de animación DEMO cada 6 segundos (solo si no hay viaje activo)
-  useEffect(() => {
-    if (hasActiveTrip) {
-      return // No alternar si hay viaje activo
-    }
-    
-    const interval = setInterval(() => {
-      setAnimationType(prev => prev === 'car' ? 'map' : 'car')
-    }, 6000)
-    return () => clearInterval(interval)
-  }, [hasActiveTrip])
+
   
   // Calcular progreso real del viaje si hay viaje activo, o demo
   useEffect(() => {
@@ -130,33 +93,17 @@ export default function HomeScreen() {
       }
     }
     
-    // Si no hay viaje o no tenemos coords, usar DEMO con animación visual
+    // Si no hay viaje o no tenemos coords, limpiar
     if (!selectedRoute || !progress) {
       setHasActiveTrip(false)
-      // Simular progreso con animación: 0% → 100% → 0%
-      const demoProgress = Animated.loop(
-        Animated.sequence([
-          Animated.timing(new Animated.Value(0), {
-            toValue: 1,
-            duration: 3000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ])
-      )
       return
     }
     
-    // Actualizar progreso si hay viaje activo
+    // Actualizar dinero y estado del viaje si hay ruta activa
     if (progress) {
       setTripProgress(progress.progressPercent)
       setLocationStatus(status)
-      
-      Animated.timing(realTripProgressAnim, {
-        toValue: progress.progressPercent / 100,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start()
+      setHasActiveTrip(true)
     }
   }, [userLocation, realTripProgressAnim, selectedRoute])
   
@@ -174,14 +121,14 @@ export default function HomeScreen() {
     setIsFetchingTopRoutes(true)
     setTopRoutes([])
     try {
-      const routes = await fetchRoutes(undefined, undefined, transportType, 'driver_rating', false, 4)
+      const routes = await fetchRoutes(undefined, undefined, 'all', 'driver_rating', false, 4)
       setTopRoutes(routes)
     } catch (err) {
       console.warn('Error cargando rutas destacadas:', err)
     } finally {
       setIsFetchingTopRoutes(false)
     }
-  }, [fetchRoutes, transportType])
+  }, [fetchRoutes])
 
   useFocusEffect(
     useCallback(() => {
@@ -207,37 +154,18 @@ export default function HomeScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* Balance / Earnings Card */}
+        {/* Balance / Earnings Card - REDISEÑADA */}
         <View
           style={[styles.balanceCard, { backgroundColor: '#E8F1FF' }]}
         >
-          {/* Card Content - Compact Layout */}
-          <View style={{ padding: SPACING.md, paddingVertical: SPACING.md }}>
+          <View style={{ padding: SPACING.lg }}>
             {/* Header Row: Greeting + Notification Button */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 }}>
-                  <Text style={[styles.greeting, { color: '#1a1a1a', fontSize: 13 }]}>
-                    {getGreeting()},
+                <Text style={[styles.greeting, { color: '#1a1a1a', fontSize: 26, fontWeight: '600', lineHeight: 32 }]}>
+                  {getGreeting()}, <Text style={{ fontWeight: '800', color: COLORS.primary }}>
+                    {user?.name ? user.name.split(' ')[0] : 'Usuario'}
                   </Text>
-                  <Text style={{ 
-                    fontSize: 15, 
-                    fontWeight: '700', 
-                    color: COLORS.primary,
-                    marginLeft: 4
-                  }}>
-                    {user?.name ? user.name.split(' ')[0] : ''}
-                  </Text>
-                </View>
-                
-                {/* Role - Large & Prominent */}
-                <Text style={{ 
-                  fontSize: 28, 
-                  fontWeight: '800', 
-                  color: '#F5F5F5',
-                  lineHeight: 32
-                }}>
-                  {isDriver ? 'Conductor' : 'Pasajero'}
                 </Text>
               </View>
               
@@ -259,170 +187,211 @@ export default function HomeScreen() {
                 {notificationUnreadCount > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: -4,
-                    right: -4,
+                    top: -8,
+                    right: -8,
                     backgroundColor: COLORS.error,
-                    borderRadius: 10,
-                    minWidth: 20,
-                    height: 20,
+                    borderRadius: 12,
+                    minWidth: 24,
+                    height: 24,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
                       {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
                     </Text>
                   </View>
                 )}
               </TouchableOpacity>
             </View>
-            
-            {/* Transport Visualization + Amount Row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
-              
-              {/* Left: Transport Animation - Expanded Horizontally */}
-              <View style={{
-                width: 240,
-                height: 90,
-                backgroundColor: 'rgba(21, 74, 168, 0.08)',
-                borderRadius: 14,
-                justifyContent: 'center',
-                alignItems: 'center',
-                position: 'relative',
-                overflow: 'hidden',
+
+            {/* Main Amount - PROTAGONIST */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ 
+                fontSize: 32, 
+                fontWeight: '800', 
+                color: COLORS.primary,
+                letterSpacing: -0.8
               }}>
-                {/* ANIMACIÓN PRINCIPAL: LÍNEA HORIZONTAL CON PROGRESO */}
-                <>
-                  {/* Línea de progreso completa (background) */}
-                  <View style={{
-                    position: 'absolute',
-                    width: '90%',
-                    height: 3,
-                    backgroundColor: '#E0E0E0',
-                    borderRadius: 1.5,
-                    left: '5%',
-                  }} />
-                  
-                  {/* Línea de progreso real (foreground) */}
-                  <Animated.View
-                    style={{
-                      position: 'absolute',
-                      height: 3,
-                      backgroundColor: hasActiveTrip ? '#10B981' : '#3B82F6',
-                      borderRadius: 1.5,
-                      left: '5%',
-                      width: realTripProgressAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0%', '90%'],
-                      }),
-                    }}
-                  />
-                  
-                  {/* Punto origen - Verde */}
-                  <View style={{
-                    position: 'absolute',
-                    left: '5%',
-                    width: 14,
-                    height: 14,
-                    borderRadius: 7,
-                    backgroundColor: '#10B981',
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    zIndex: 2,
-                  }} />
-                  
-                  {/* Punto destino - Rojo */}
-                  <View style={{
-                    position: 'absolute',
-                    right: '5%',
-                    width: 14,
-                    height: 14,
-                    borderRadius: 7,
-                    backgroundColor: '#EF4444',
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    zIndex: 2,
-                  }} />
-                  
-                  {/* Carro animado según progreso */}
-                  <Animated.View
-                    style={{
-                      position: 'absolute',
-                      zIndex: 3,
-                      transform: [
-                        {
-                          translateX: realTripProgressAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [6, 220],
-                          }),
-                        },
-                        {
-                          translateY: 0,
-                        },
-                      ],
-                    }}
-                  >
-                    <Ionicons name="car-sport" size={24} color={hasActiveTrip ? '#154AA8' : '#3B82F6'} />
-                  </Animated.View>
-                  
-                  {/* Información de progreso en la parte inferior */}
-                  <Text style={{
-                    position: 'absolute',
-                    bottom: 8,
-                    fontSize: 11,
-                    fontWeight: '600',
-                    color: hasActiveTrip ? '#154AA8' : '#666',
-                    backgroundColor: hasActiveTrip ? '#E8F1FF' : '#F0F0F0',
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    borderRadius: 8,
-                  }}>
-                    {hasActiveTrip ? `${tripProgress.toFixed(0)}%` : 'Demo'}
-                  </Text>
-                </>
-                {/* Fin animación principal */}
-              </View>
-              
-              {/* Right: Amount & Subtitle */}
-              <View style={{ alignItems: 'flex-end', flex: 1, marginLeft: SPACING.md }}>
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontWeight: '800', 
-                  color: '#1a1a1a',
-                  letterSpacing: -0.5
-                }}>
-                  ${(isDriver ? user?.earnings ?? 0 : user?.spent ?? 0).toLocaleString('es-CO')}
-                </Text>
-                <Text style={{ 
-                  fontSize: 10, 
-                  fontWeight: '400', 
-                  color: '#1a1a1a' + '75',
-                  marginTop: 1
-                }}>
-                  {isDriver ? 'Ganancias' : 'Gastado'}
-                </Text>
-              </View>
+                ${(isDriver ? user?.earnings ?? 0 : user?.spent ?? 0).toLocaleString('es-CO')}
+              </Text>
+              <Text style={{ 
+                fontSize: 12, 
+                fontWeight: '500', 
+                color: '#1a1a1a' + '75',
+                marginTop: 2
+              }}>
+                {isDriver ? 'Ganancias hoy' : 'Gastado este mes'}
+              </Text>
             </View>
-            
-            {/* Location Status - Si hay viaje activo */}
-            {hasActiveTrip && locationStatus && (
-              <View style={{ marginTop: 12, paddingHorizontal: 0 }}>
-                <Text style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: '#154AA8',
-                  textAlign: 'center',
-                  backgroundColor: '#E8F1FF',
+
+            {/* Status Pills - Conductor */}
+            {isDriver && (
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <View style={{
+                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
+                  paddingHorizontal: 10,
                   paddingVertical: 6,
-                  paddingHorizontal: 8,
                   borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4
                 }}>
-                  📍 {locationStatus}
-                </Text>
+                  <Ionicons name="car" size={14} color={COLORS.primary} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary }}>
+                    4 viajes
+                  </Text>
+                </View>
+                
+                <View style={{
+                  backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3
+                }}>
+                  <Ionicons name="star" size={14} color="#FACC15" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#92400E' }}>
+                    4.8
+                  </Text>
+                </View>
+                
+                <View style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#065F46' }}>
+                    En línea
+                  </Text>
+                </View>
               </View>
             )}
-            
-            {/* TRIVE Chip - Bottom Left */}
-            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start' }]}>
+
+            {/* Status Pills - Pasajero */}
+            {!isDriver && (
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <View style={{
+                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <Ionicons name="calendar" size={14} color={COLORS.primary} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary }}>
+                    Próx: 22:30
+                  </Text>
+                </View>
+                
+                {/* Membership Badge */}
+                {(() => {
+                  const membershipType = user?.membership_type || 'free'
+                  const membershipExpiry = user?.membership_expiry ? new Date(user.membership_expiry) : null
+                  const today = new Date()
+                  const daysRemaining = membershipExpiry && membershipExpiry > today 
+                    ? Math.ceil((membershipExpiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                    : 0
+
+                  // Colores según tipo de membresía
+                  const membershipColors: Record<string, { bg: string; text: string; icon: string }> = {
+                    free: { bg: 'rgba(107, 114, 128, 0.1)', text: '#374151', icon: 'shield-outline' },
+                    basic: { bg: 'rgba(59, 130, 246, 0.1)', text: '#1E40AF', icon: 'shield-checkmark' },
+                    premium: { bg: 'rgba(168, 85, 247, 0.1)', text: '#6B21A8', icon: 'star' },
+                    vip: { bg: 'rgba(217, 70, 39, 0.1)', text: '#7C2D12', icon: 'crown' },
+                  }
+
+                  const colors = membershipColors[membershipType] || membershipColors.free
+                  const displayText = membershipType === 'free' 
+                    ? 'Gratis'
+                    : membershipType === 'basic'
+                    ? 'Básico'
+                    : membershipType === 'premium'
+                    ? 'Premium'
+                    : 'VIP'
+
+                  const displaySubtext = daysRemaining > 0 
+                    ? `${daysRemaining} días`
+                    : membershipExpiry
+                    ? 'Expirado'
+                    : ''
+
+                  return (
+                    <View style={{
+                      backgroundColor: colors.bg,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      <Ionicons name={colors.icon as any} size={14} color={colors.text} />
+                      <View>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>
+                          {displayText}
+                        </Text>
+                        {displaySubtext && (
+                          <Text style={{ fontSize: 10, color: colors.text, opacity: 0.7 }}>
+                            {displaySubtext}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })()}
+                
+                {/* Saldo Badge */}
+                {(() => {
+                  const balance = user?.balance || 0
+                  const formattedBalance = balance >= 1000 
+                    ? `$${(balance / 1000).toFixed(1)}k`
+                    : `$${balance}`
+                  
+                  let balanceColor = '#22C55E' // Green (healthy)
+                  let balanceTextColor = '#15803D'
+                  
+                  if (balance < 10000) {
+                    balanceColor = '#EAB308' // Yellow (low)
+                    balanceTextColor = '#713F12'
+                  }
+                  if (balance < 5000) {
+                    balanceColor = '#EF4444' // Red (warning)
+                    balanceTextColor = '#7F1D1D'
+                  }
+
+                  return (
+                    <View style={{
+                      backgroundColor: balanceColor === '#22C55E' ? 'rgba(34, 197, 94, 0.1)' : balanceColor === '#EAB308' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      <Ionicons name="wallet" size={14} color={balanceColor} />
+                      <View>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: balanceTextColor }}>
+                          Saldo: {formattedBalance}
+                        </Text>
+                      </View>
+                    </View>
+                  )
+                })()}
+              </View>
+            )}
+
+            {/* TRIVE Chip - Bottom */}
+            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start', marginTop: 12 }]}>
               <Text style={[styles.balanceChipText, { color: COLORS.textInverse }]}>TRIVE</Text>
             </View>
           </View>
@@ -430,7 +399,7 @@ export default function HomeScreen() {
 
         {/* Search Section */}
         <View style={styles.searchSection}>
-          <Text style={styles.sectionTitle}>¿A dónde vas?</Text>
+          <Text style={styles.sectionTitle}>Buscar viaje</Text>
 
           <View style={styles.searchCard}>
             <View style={styles.searchRow}>
@@ -440,10 +409,13 @@ export default function HomeScreen() {
               </View>
               <View style={styles.searchInputContainer}>
                 <Text style={styles.searchLabel}>Desde</Text>
-                <View style={styles.searchValueRow}>
-                  <Ionicons name="locate" size={14} color={COLORS.primary} />
-                  <Text style={styles.searchValue} numberOfLines={1}>Mi ubicación actual</Text>
-                </View>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Ej: Armenia, Cali..."
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={origin}
+                  onChangeText={setOrigin}
+                />
               </View>
             </View>
 
@@ -465,119 +437,49 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.searchBtn, !destination && styles.searchBtnDisabled]}
-            disabled={!destination}
+            style={[styles.searchBtn, !destination || !origin && styles.searchBtnDisabled]}
+            disabled={!destination || !origin}
             onPress={() =>
               navigation.navigate(
                 'Main' as never,
-                { screen: 'Search', params: { transportType, destination: destination.trim() } } as never,
+                { screen: 'Search', params: { origin: origin.trim(), destination: destination.trim() } } as never,
               )
             }
             activeOpacity={0.85}
           >
-            <Ionicons name="search" size={20} color={destination ? COLORS.textInverse : COLORS.textSecondary} />
-            <Text style={[styles.searchBtnText, !destination && styles.searchBtnTextDisabled]}>
+            <Ionicons name="search" size={20} color={destination && origin ? COLORS.textInverse : COLORS.textSecondary} />
+            <Text style={[styles.searchBtnText, !destination || !origin && styles.searchBtnTextDisabled]}>
               Buscar rutas
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Transport Type Selector */}
-        <View style={styles.transportSection}>
-          <Text style={styles.sectionTitle}>Tipo de transporte</Text>
-          <View style={styles.transportRow}>
-            {(['all', 'auto', 'taxi', 'busetica', 'buseta'] as const).map((type) => {
-              const isActive = transportType === type
-              const icons: Record<string, string> = {
-                all: 'apps',
-                auto: 'car',
-                taxi: 'car-outline',
-                busetica: 'bus-outline',
-                buseta: 'bus',
-              }
-              const labels: Record<string, string> = {
-                all: 'Todos',
-                auto: 'Auto',
-                taxi: 'Taxi',
-                busetica: 'Busetica',
-                buseta: 'Buseta',
-              }
+        {/* Available Rides NOW Button */}
+        <TouchableOpacity
+          style={styles.availableRidesButton}
+          onPress={() => navigation.navigate('AvailableRides' as never)}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#10A37F', '#0E8B6E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.availableRidesGradient}
+          >
+            <View style={styles.availableRidesContent}>
+              <View style={styles.availableRidesIcon}>
+                <Ionicons name="flash" size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.availableRidesText}>
+                <Text style={styles.availableRidesLabel}>Viajes Ahora</Text>
+                <Text style={styles.availableRidesSubtitle}>Ver disponibles en tiempo real</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
-              return (
-                <Pressable
-                  key={type}
-                  style={[styles.transportItem, isActive && styles.transportItemActive]}
-                  onPress={() => setTransportType(type)}
-                >
-                  <View style={[styles.transportIcon, isActive && styles.transportIconActive]}>
-                    <Ionicons
-                      name={icons[type] as any}
-                      size={18}
-                      color={(() => {
-                        if (type === 'taxi') return '#FFD700';
-                        if (type === 'auto' || type === 'busetica' || type === 'buseta') return '#154AA8';
-                        return '#154AA8';
-                      })()}
-                    />
-                  </View>
-                  <Text style={[styles.transportLabel, isActive && styles.transportLabelActive]} numberOfLines={1}>
-                    {labels[type]}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => navigation.navigate('ScheduledTrips' as never)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}> 
-              <Ionicons name="calendar-outline" size={18} color="#154AA8" />
-            </View>
-            <Text style={styles.quickActionText} numberOfLines={1}>Mis viajes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => navigation.navigate('GroupTrips' as never)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
-              <Ionicons name="people-outline" size={18} color="#154AA8" />
-            </View>
-            <Text style={styles.quickActionText} numberOfLines={1}>Grupal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => navigation.navigate('FavoriteRoutes' as never)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
-              <Ionicons name="heart-outline" size={18} color={COLORS.success} />
-            </View>
-            <Text style={styles.quickActionText} numberOfLines={1}>Favoritos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => navigation.navigate('TripHistory' as never)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}>
-              <Ionicons name="receipt-outline" size={18} color={COLORS.warning} />
-            </View>
-            <Text style={styles.quickActionText} numberOfLines={1}>Historial</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => navigation.navigate('Chat' as never)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'transparent' }]}> 
-              <Ionicons name="chatbubble-outline" size={18} color="#154AA8" />
-            </View>
-            <Text style={styles.quickActionText} numberOfLines={1}>Mensajes</Text>
-          </TouchableOpacity>
-        </View>
-
+        {/* Routes Section */}
         <View style={styles.routesSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Rutas destacadas</Text>
@@ -585,7 +487,7 @@ export default function HomeScreen() {
               onPress={() =>
                 navigation.navigate(
                   'Main' as never,
-                  { screen: 'Search', params: { transportType: 'all' } } as never,
+                  { screen: 'Search' } as never,
                 )
               }
               activeOpacity={0.8}
@@ -613,7 +515,7 @@ export default function HomeScreen() {
                 onPress={() =>
                   navigation.navigate(
                     'Main' as never,
-                    { screen: 'Search', params: { transportType } } as never,
+                    { screen: 'Search' } as never,
                   )
                 }
               >
@@ -861,6 +763,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   searchRow: {
     flexDirection: 'row',
@@ -889,7 +793,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#EF4444',
   },
   pointLine: {
     width: 2,
@@ -934,12 +838,12 @@ const styles = StyleSheet.create({
     gap: 8,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 8,
   },
   searchBtnDisabled: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: '#D1D5DB',
   },
   searchBtnText: {
     fontSize: 15,
@@ -957,56 +861,69 @@ const styles = StyleSheet.create({
   transportRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.lg,
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   transportItem: {
     flex: 1,
-    minWidth: 60,
-    backgroundColor: '#E8F1FF',
-    borderRadius: 14,
-    padding: 10,
+    minWidth: 56,
+    maxWidth: '18.5%',
+    backgroundColor: '#F0F4FA',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     alignItems: 'center',
-    shadowColor: '#154AA8',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    justifyContent: 'center',
+    flexDirection: 'column',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    shadowColor: 'rgba(21, 74, 168, 0.08)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   transportItemActive: {
-    backgroundColor: '#E8F1FF',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 0,
+    backgroundColor: COLORS.primary,
     borderColor: 'transparent',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  transportItemGradient: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    width: '100%',
   },
   transportIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 4,
-    borderWidth: 0,
-    borderColor: 'transparent',
   },
-  transportIconActive: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
+  transportIconInner: {
+    marginBottom: 4,
+  },
+  transportIconInactive: {
+    marginBottom: 4,
   },
   transportLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#1a1a1a',
     textAlign: 'center',
+    lineHeight: 11,
   },
   transportLabelActive: {
-    color: '#1a1a1a',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 11,
   },
 
   // Quick Actions
@@ -1358,5 +1275,48 @@ const styles = StyleSheet.create({
     color: COLORS.textInverse,
     fontWeight: '600',
     fontSize: 12,
+  },
+
+  // Available Rides Button
+  availableRidesButton: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    shadowColor: '#10A37F',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  availableRidesGradient: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  availableRidesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  availableRidesIcon: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  availableRidesText: {
+    flex: 1,
+  },
+  availableRidesLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  availableRidesSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
   },
 })

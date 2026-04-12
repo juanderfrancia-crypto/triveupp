@@ -103,6 +103,9 @@ export default function LoginPhoneScreen() {
             phone: profile.phone,
             role: profile.role,
             rating: profile.rating,
+            balance: profile.balance || 0,
+            membership_type: profile.membership_type || 'free',
+            membership_expiry: profile.membership_expiry,
           })
         } else {
           const userName = data.user.user_metadata?.full_name || 'Usuario'
@@ -132,6 +135,9 @@ export default function LoginPhoneScreen() {
             phone: insertedProfile.phone,
             role: insertedProfile.role,
             rating: insertedProfile.rating || 0,
+            balance: insertedProfile.balance || 0,
+            membership_type: insertedProfile.membership_type || 'free',
+            membership_expiry: insertedProfile.membership_expiry || null,
           })
         }
         setAuthUser(data.user)
@@ -183,7 +189,7 @@ export default function LoginPhoneScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/logoT.png')}
+              source={require('../../assets/logo.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />

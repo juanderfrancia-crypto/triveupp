@@ -134,14 +134,6 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      <LinearGradient
-        colors={[COLORS.background, COLORS.surfaceAlt]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.backgroundGradient}
-      />
-      <View style={styles.decorativeCircleLarge} />
-      <View style={styles.decorativeCircleSmall} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -172,7 +164,6 @@ export default function SearchScreen() {
         {/* Search Box */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBox}>
-            <Ionicons name="search" size={20} color={COLORS.primary} />
             <TextInput
               style={styles.searchInput}
               placeholder="Buscar por origen o destino"
@@ -256,15 +247,10 @@ export default function SearchScreen() {
                 onPress={() => handleSelectRoute(route)}
                 activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={[COLORS.primaryDark, COLORS.primary]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.routeCardGradient}
-                >
+                <View style={styles.routeCardGradient}>
                   {/* Status Badge */}
                   <View style={[styles.routeCardBadge, route.available_seats > 0 ? styles.badgeAvailable : styles.badgeFull]}>
-                    <Ionicons name={route.available_seats > 0 ? 'checkmark-circle' : 'close-circle'} size={12} color={COLORS.textInverse} />
+                    <Ionicons name={route.available_seats > 0 ? 'checkmark-circle' : 'close-circle'} size={12} color={route.available_seats > 0 ? COLORS.success : COLORS.error} />
                     <Text style={styles.routeCardBadgeText}>
                       {route.available_seats > 0 ? 'Disponible' : 'Lleno'}
                     </Text>
@@ -280,7 +266,7 @@ export default function SearchScreen() {
                   <View style={styles.routeCardRouteSection}>
                     <View style={styles.routeCardOrigin}>
                       <View style={styles.routeCardLocationIcon}>
-                        <Ionicons name="location" size={18} color="#fff" />
+                      <Ionicons name="location" size={18} color={COLORS.primary} />
                       </View>
                       <View style={styles.routeCardLocationText}>
                         <Text style={styles.routeCardLocationLabel}>SALIDA</Text>
@@ -289,12 +275,12 @@ export default function SearchScreen() {
                     </View>
 
                     <View style={styles.routeCardArrow}>
-                      <Ionicons name="arrow-forward" size={16} color={COLORS.textInverse} />
+                      <Ionicons name="arrow-forward" size={16} color={COLORS.textSecondary} />
                     </View>
 
                     <View style={styles.routeCardDestination}>
                       <View style={styles.routeCardLocationIcon}>
-                        <Ionicons name="location" size={18} color="#fff" />
+                      <Ionicons name="location" size={18} color={COLORS.error} />
                       </View>
                       <View style={styles.routeCardLocationText}>
                         <Text style={styles.routeCardLocationLabel}>DESTINO</Text>
@@ -306,14 +292,14 @@ export default function SearchScreen() {
                   {/* Footer with Details */}
                   <View style={styles.routeCardFooterSection}>
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="time-outline" size={14} color={COLORS.textInverse} />
+                      <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
                       <Text style={styles.routeCardFooterText}>
                         {formatTime(route.departure_time, route.arrival_time)}
                       </Text>
                     </View>
                     <View style={styles.routeCardFooterDivider} />
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="calendar-outline" size={14} color={COLORS.textInverse} />
+                      <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
                       <Text style={styles.routeCardFooterText}>
                         {new Date(route.departure_time).toLocaleDateString('es-CO', {
                           month: 'short',
@@ -323,11 +309,34 @@ export default function SearchScreen() {
                     </View>
                     <View style={styles.routeCardFooterDivider} />
                     <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="cash-outline" size={14} color={COLORS.textInverse} />
+                      <Ionicons name="cash-outline" size={14} color={COLORS.textSecondary} />
                       <Text style={styles.routeCardFooterText}>{formatPrice(route.price_per_seat)}</Text>
                     </View>
                   </View>
-                </LinearGradient>
+
+                  {/* Driver & Vehicle Info */}
+                  <View style={styles.driverVehicleSection}>
+                    <View style={styles.driverVehicleRow}>
+                      <View style={styles.driverVehicleItem}>
+                        <Ionicons name="person" size={14} color={COLORS.primary} />
+                        <Text style={styles.driverVehicleLabel}>Conductor:</Text>
+                        <Text style={styles.driverVehicleValue}>{route.driver_name || 'N/A'}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.driverVehicleRow}>
+                      <View style={styles.driverVehicleItem}>
+                        <Ionicons name="car-outline" size={14} color={COLORS.primary} />
+                        <Text style={styles.driverVehicleLabel}>Placa:</Text>
+                        <Text style={styles.driverVehicleValue}>{route.vehicle_plate || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.driverVehicleItem}>
+                        <Ionicons name="car" size={14} color={COLORS.primary} />
+                        <Text style={styles.driverVehicleLabel}>Color:</Text>
+                        <Text style={styles.driverVehicleValue}>{route.vehicle_color || 'N/A'}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
 
                 {/* Availability Badge + CTA */}
                 <View style={styles.routeCardBottom}>
@@ -359,7 +368,7 @@ export default function SearchScreen() {
 
                   <View style={styles.routeCardCTA}>
                     <Text style={styles.routeCardCTAText}>Ver detalles</Text>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textInverse} />
+                    <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -374,32 +383,20 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#FFFFFF',
   },
   backgroundGradient: {
-    ...StyleSheet.absoluteFillObject,
+    display: 'none',
   },
   decorativeCircleLarge: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: COLORS.surface + 'EE',
-    top: -70,
-    left: -50,
+    display: 'none',
   },
   decorativeCircleSmall: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.accentLight + '18',
-    top: 120,
-    right: -40,
+    display: 'none',
   },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     paddingBottom: SPACING.xxxl,
@@ -443,19 +440,20 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.lg,
     height: 52,
     gap: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: '#E5E7EB',
     ...SHADOWS.sm,
   },
   searchInput: {
     flex: 1,
     ...TYPOGRAPHY.body,
-    color: COLORS.textPrimary,
+    color: COLORS.text,
+    paddingRight: SPACING.md,
   },
 
   // Filter Tabs
@@ -471,28 +469,24 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.surface + 'F8', // 97.3% opacidad
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.borderLight + '99', // Semi-transparente
-    // Luz blanca en el borde superior
-    borderTopColor: COLORS.shadowWhiteLight,
-    borderTopWidth: 1.5,
+    borderColor: '#E5E7EB',
     ...SHADOWS.sm,
   },
   filterTabActive: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
-    ...SHADOWS.orangeSoft,
-    borderTopColor: COLORS.shadowWhiteMid,
-    borderTopWidth: 2,
+    ...SHADOWS.sm,
   },
   filterText: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   filterTextActive: {
-    color: COLORS.textInverse,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 
@@ -595,19 +589,25 @@ const styles = StyleSheet.create({
 
   // Route Card - NEW GRADIENT STYLE
   routeCardWrapper: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    backgroundColor: COLORS.surface,
-    ...SHADOWS.sm,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   routeCardGradient: {
     borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-    backgroundColor: COLORS.primary,
-    borderWidth: 1,
-    borderColor: COLORS.primaryDark,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: '#FFFFFF',
   },
   routeCardBadge: {
     flexDirection: 'row',
@@ -617,38 +617,38 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
     borderRadius: RADIUS.full,
     alignSelf: 'flex-start',
-    marginBottom: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginBottom: SPACING.sm,
+    backgroundColor: '#E8F5E9',
   },
   badgeAvailable: {
-    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    backgroundColor: '#E8F5E9',
   },
   badgeFull: {
-    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    backgroundColor: '#FFEBEE',
   },
   routeCardBadgeText: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
+    color: COLORS.text,
     fontWeight: '600',
   },
   routeCardType: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: COLORS.primary + '15',
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   routeCardTypeText: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
+    color: COLORS.primary,
     fontWeight: '600',
   },
   routeCardRouteSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   routeCardOrigin: {
     flex: 1,
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: COLORS.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -675,24 +675,26 @@ const styles = StyleSheet.create({
   },
   routeCardLocationLabel: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textInverse + 'CC',
+    color: COLORS.textSecondary,
     marginBottom: SPACING.xs,
+    fontSize: 10,
   },
   routeCardLocationName: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: COLORS.text,
     fontWeight: '700',
   },
   routeCardArrow: {
     paddingHorizontal: SPACING.sm,
+    marginHorizontal: SPACING.xs,
   },
   routeCardFooterSection: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.18)',
-    paddingTop: SPACING.md,
-    marginTop: SPACING.md,
+    borderTopColor: '#E5E7EB',
+    paddingTop: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   routeCardFooterItem: {
     flex: 1,
@@ -702,22 +704,22 @@ const styles = StyleSheet.create({
   },
   routeCardFooterText: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
+    color: COLORS.text,
     fontWeight: '600',
     flex: 1,
   },
   routeCardFooterDivider: {
     width: 1,
     height: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#E5E7EB',
     marginHorizontal: SPACING.md,
   },
   routeCardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.sm,
     padding: SPACING.md,
-    backgroundColor: COLORS.primaryDark,
+    backgroundColor: '#F3F4F6',
     borderBottomLeftRadius: RADIUS.xl,
     borderBottomRightRadius: RADIUS.xl,
   },
@@ -758,8 +760,39 @@ const styles = StyleSheet.create({
   },
   routeCardCTAText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: COLORS.primary,
     fontWeight: '600',
+  },
+
+  // Driver & Vehicle Section
+  driverVehicleSection: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: SPACING.md,
+    marginTop: SPACING.md,
+  },
+  driverVehicleRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  driverVehicleItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  driverVehicleLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    fontSize: 10,
+  },
+  driverVehicleValue: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.text,
+    fontWeight: '600',
+    fontSize: 11,
   },
 
   // Deprecated styles (kept for compatibility)

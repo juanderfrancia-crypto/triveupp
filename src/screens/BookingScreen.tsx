@@ -187,7 +187,7 @@ export default function BookingScreen() {
             <View style={styles.routeLineContainer}>
               <View style={styles.routeLine} />
               <View style={styles.carIconContainer}>
-                <Ionicons name="car-outline" size={20} color="#fff" />
+                <Ionicons name="car-outline" size={20} color={COLORS.textSecondary} />
               </View>
             </View>
             <View style={[styles.routePoint, styles.routePointColumn]}>
@@ -197,18 +197,18 @@ export default function BookingScreen() {
             </View>
           </View>
 
-          <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
+          <View style={[styles.divider, { backgroundColor: COLORS.borderLight }]} />
 
           <View style={styles.detailsGrid}>
             <View style={styles.detailItem}>
-              <Ionicons name="calendar-outline" size={20} color="#fff" />
-              <Text style={[styles.detailLabel, { color: 'rgba(255,255,255,0.8)' }]}>Fecha</Text>
-              <Text style={[styles.detailValue, { color: '#fff' }]}>{formattedDate}</Text>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
+              <Text style={[styles.detailLabel, { color: COLORS.textSecondary }]}>Fecha</Text>
+              <Text style={[styles.detailValue, { color: COLORS.textPrimary }]}>{formattedDate}</Text>
             </View>
             <View style={styles.detailItem}>
-              <Ionicons name="time-outline" size={20} color="#fff" />
-              <Text style={[styles.detailLabel, { color: 'rgba(255,255,255,0.8)' }]}>Hora</Text>
-              <Text style={[styles.detailValue, { color: '#fff' }]}>{formattedTime}</Text>
+              <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} />
+              <Text style={[styles.detailLabel, { color: COLORS.textSecondary }]}>Hora</Text>
+              <Text style={[styles.detailValue, { color: COLORS.textPrimary }]}>{formattedTime}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -442,6 +442,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   routeRow: {
     flexDirection: 'row',
@@ -491,7 +496,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: COLORS.borderLight,
     width: '100%',
   },
   routeLineContainer: {
@@ -503,11 +508,11 @@ const styles = StyleSheet.create({
   },
   carIconContainer: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: SPACING.xs,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderColor: COLORS.borderLight,
     zIndex: 10,
   },
   divider: {
@@ -548,6 +553,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   sectionTitle: {
     ...TYPOGRAPHY.label,
@@ -592,6 +602,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   passengerRow: {
     flexDirection: 'row',
@@ -638,6 +653,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   vehicleRow: {
     flexDirection: 'row',
@@ -682,6 +702,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   paymentOption: {
     flexDirection: 'row',
@@ -742,6 +767,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   priceRow: {
     flexDirection: 'row',

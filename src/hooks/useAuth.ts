@@ -42,6 +42,8 @@ export const useAuth = () => {
           role: profile.role,
           rating: profile.rating,
           avatar_url: profile.avatar_url,
+          membership_type: profile.membership_type || 'free',
+          membership_expiry: profile.membership_expiry,
         });
       } else {
         const userName = currentSession.user.user_metadata?.full_name || "Usuario";
