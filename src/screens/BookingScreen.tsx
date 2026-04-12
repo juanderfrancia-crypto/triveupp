@@ -15,7 +15,10 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
 import { useNotifications } from '../hooks/useNotifications'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
 import Toast from '../components/Toast'
+import OfflineBanner from '../components/OfflineBanner'
 
 export default function BookingScreen() {
   const navigation = useNavigation<any>()
@@ -78,9 +81,13 @@ export default function BookingScreen() {
 
   const handleCashBooking = async () => {
     if (!authUser) {
-      setToastMessage('Debes iniciar sesión para confirmar la reserva')
-      setToastType('error')
-      setToastVisible(true)
+      errorHandler.handle(
+        'Debes iniciar sesión para confirmar la reserva',
+        ErrorType.AUTH,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'booking_not_authenticated' }
+      )
       return
     }
 
@@ -130,25 +137,54 @@ export default function BookingScreen() {
           console.error('Error creando notificación:', notifError)
         }
 
-        setToastMessage(`Reserva confirmada. Asientos: ${seat_numbers.join(', ')}`)
-        setToastType('success')
-        setToastVisible(true)
-        navigation.navigate('TripStatus' as never)
+        errorHandler.handle(
+          `✅ Reserva confirmada. Asientos: ${seat_numbers.join(', ')}`,
+          ErrorType.UNKNOWN,
+          ErrorSeverity.LOW,
+          true,
+          { context: 'booking_success', route_id: selectedRoute.id }
+        )
+        setTimeout(() => navigation.navigate('TripStatus' as never), 1500)
       } else {
-        setToastMessage('Some bookings failed. Please contact support.')
-        setToastType('error')
-        setToastVisible(true)
+        errorHandler.handle(
+          'Algunas reservas fallaron. Por favor contacta a soporte.',
+          ErrorType.DATABASE,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'booking_partial_failure' }
+        )
       }
     } catch (error: any) {
       if (error.code === 'SEAT_ALREADY_RESERVED') {
-        setToastMessage('Uno de los asientos seleccionados ya fue reservado. Por favor vuelve a seleccionar.')
-        setToastType('error')
-        setToastVisible(true)
+        errorHandler.handle(
+          'Uno de los asientos seleccionados ya fue reservado. Por favor vuelve a seleccionar.',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_conflict' }
+        )
         setTimeout(() => navigation.navigate('SeatSelection' as never), 2000)
+      } else if (error.message?.includes('Network') || error.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'booking_network_error' }
+        )
       } else {
-        setToastMessage(error.message || 'Error al confirmar la reserva')
-        setToastType('error')
-        setToastVisible(true)
+        // Manejo de error con Supabase
+        if (error.code) {
+          errorHandler.handleSupabaseError(error, 'finalize_booking', { route_id: selectedRoute.id })
+        } else {
+          errorHandler.handle(
+            error,
+            ErrorType.UNKNOWN,
+            ErrorSeverity.MEDIUM,
+            true,
+            { context: 'booking_error', error: error.message }
+          )
+        }
       }
     }
   }
@@ -159,6 +195,7 @@ export default function BookingScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
+      <OfflineBanner />
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>

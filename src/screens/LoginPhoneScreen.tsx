@@ -21,6 +21,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
+import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import OfflineBanner from '../components/OfflineBanner'
 import Toast from '../components/Toast'
 
 export default function LoginPhoneScreen() {
@@ -71,9 +73,39 @@ export default function LoginPhoneScreen() {
       setIsSubmitting(true)
       await signInWithOTP(phone)
       setStep('otp')
-      showToast(`Código enviado al ${phone}. Válido por 10 minutos.`, 'success')
+      errorHandler.handle(
+        `✅ Código enviado al ${phone}. Válido por 10 minutos.`,
+        ErrorType.UNKNOWN,
+        ErrorSeverity.LOW,
+        true,
+        { context: 'otp_sent', phone }
+      )
     } catch (err: any) {
-      showToast(err.message || 'No se pudo enviar el OTP', 'error')
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'otp_send_network' }
+        )
+      } else if (err.message?.includes('rate')) {
+        errorHandler.handle(
+          'Demasiados intentos. Por favor espera unos minutos.',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'otp_rate_limit' }
+        )
+      } else {
+        errorHandler.handle(
+          err,
+          ErrorType.UNKNOWN,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'otp_send_error', phone }
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -92,7 +124,8 @@ export default function LoginPhoneScreen() {
           .maybeSingle()
 
         if (fetchError && fetchError.code !== 'PGRST116') {
-          throw fetchError
+          errorHandler.handleSupabaseError(fetchError, 'fetch_profile_phone', { userId: data.user.id })
+          return
         }
 
         if (profile) {
@@ -124,7 +157,7 @@ export default function LoginPhoneScreen() {
             .single()
 
           if (insertError) {
-            showToast('No se pudo crear tu perfil. Intenta de nuevo.', 'error')
+            errorHandler.handleSupabaseError(insertError, 'create_profile_phone', { phone, email: userEmail })
             return
           }
 
@@ -141,9 +174,40 @@ export default function LoginPhoneScreen() {
           })
         }
         setAuthUser(data.user)
+        errorHandler.handle(
+          '✅ Inicio de sesión exitoso',
+          ErrorType.UNKNOWN,
+          ErrorSeverity.LOW,
+          true,
+          { context: 'otp_verify_success', phone }
+        )
       }
     } catch (err: any) {
-      showToast(err.message || 'Código OTP inválido', 'error')
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'otp_verify_network' }
+        )
+      } else if (err.message?.includes('invalid') || err.message?.includes('expired')) {
+        errorHandler.handle(
+          'El código OTP es inválido o expiró. Por favor solicita uno nuevo.',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'otp_invalid' }
+        )
+      } else {
+        errorHandler.handle(
+          err,
+          ErrorType.AUTH,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'otp_verify_error', phone }
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -157,6 +221,7 @@ export default function LoginPhoneScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+      <OfflineBanner />
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
 
       {/* Background decorative circles 3D */}

@@ -19,6 +19,9 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import OfflineBanner from '../components/OfflineBanner'
 
 export default function LoginScreen() {
   const navigation = useNavigation()
@@ -53,11 +56,17 @@ export default function LoginScreen() {
       setIsSubmitting(true)
       const data = (await login(email.trim(), password)) as any
       if (data?.user) {
-        const { data: profile } = await (await import('../services/supabase')).supabase
+        const { data: profile, error: profileError } = await (await import('../services/supabase')).supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
           .single()
+
+        if (profileError) {
+          errorHandler.handleSupabaseError(profileError, 'fetch_profile', { userId: data.user.id })
+          return
+        }
+
         if (profile) {
           setUser({
             id: profile.id,
@@ -74,7 +83,34 @@ export default function LoginScreen() {
         setAuthUser(data.user)
       }
     } catch (err: any) {
-      Alert.alert('Error de Login', err.message || 'Credenciales incorrectas')
+      // Detectar tipo de error
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'login' }
+        )
+      } else if (err.message?.includes('Invalid') || err.message?.includes('credentials')) {
+        errorHandler.handle(
+          'Correo o contraseña incorrectos',
+          ErrorType.AUTH,
+          ErrorSeverity.MEDIUM,
+          true,
+          { email, context: 'login' }
+        )
+      } else if (err.status === 401 || err.status === 403) {
+        errorHandler.handleApiError(err, { context: 'login_auth' })
+      } else {
+        errorHandler.handle(
+          err,
+          ErrorType.UNKNOWN,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'login' }
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -85,7 +121,26 @@ export default function LoginScreen() {
       setSocialLoading(true)
       await handleGoogleLogin()
     } catch (err: any) {
-      Alert.alert('Error', 'No se pudo iniciar sesión con Google')
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { provider: 'google' }
+        )
+      } else if (err.code === 'ERR_GOOGLE_SIGN_IN_CANCELLED') {
+        // Usuario canceló, no mostrar error
+        return
+      } else {
+        errorHandler.handle(
+          'No se pudo iniciar sesión con Google',
+          ErrorType.AUTH,
+          ErrorSeverity.MEDIUM,
+          true,
+          { provider: 'google', error: err.message }
+        )
+      }
     } finally {
       setSocialLoading(false)
     }
@@ -96,11 +151,17 @@ export default function LoginScreen() {
       setSocialLoading(true)
       const data = (await signInWithApple()) as any
       if (data?.user) {
-        const { data: profile } = await (await import('../services/supabase')).supabase
+        const { data: profile, error: profileError } = await (await import('../services/supabase')).supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
           .single()
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          errorHandler.handleSupabaseError(profileError, 'fetch_profile_apple', { userId: data.user.id })
+          return
+        }
+
         if (profile) {
           setUser({
             id: profile.id,
@@ -114,9 +175,11 @@ export default function LoginScreen() {
             membership_expiry: profile.membership_expiry,
           })
         } else {
+          // Crear perfil si no existe
           const appleEmail = data.user.email || `user_${data.user.id}@apple.local`
           const appleName = data.user.user_metadata?.full_name || 'Usuario Apple'
-          await (await import('../services/supabase')).supabase
+          
+          const { data: newProfile, error: insertError } = await (await import('../services/supabase')).supabase
             .from('profiles')
             .insert([{
               id: data.user.id,
@@ -125,6 +188,14 @@ export default function LoginScreen() {
               phone: '',
               role: 'passenger',
             }])
+            .select()
+            .single()
+
+          if (insertError) {
+            errorHandler.handleSupabaseError(insertError, 'create_profile_apple', { email: appleEmail })
+            return
+          }
+
           setUser({
             id: data.user.id,
             name: appleName,
@@ -132,6 +203,7 @@ export default function LoginScreen() {
             phone: '',
             role: 'passenger',
             rating: 0,
+            balance: 0,
             membership_type: 'free',
             membership_expiry: null,
           })
@@ -139,8 +211,27 @@ export default function LoginScreen() {
         setAuthUser(data.user)
       }
     } catch (err: any) {
-      if (err.code !== 'ERR_APPLE_SIGN_IN_CANCELLED') {
-        Alert.alert('Error', 'No se pudo iniciar sesión con Apple')
+      if (err.code === 'ERR_APPLE_SIGN_IN_CANCELLED') {
+        // Usuario canceló, no mostrar error
+        return
+      }
+      
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { provider: 'apple' }
+        )
+      } else {
+        errorHandler.handle(
+          'No se pudo iniciar sesión con Apple',
+          ErrorType.AUTH,
+          ErrorSeverity.MEDIUM,
+          true,
+          { provider: 'apple', error: err.message }
+        )
       }
     } finally {
       setSocialLoading(false)
@@ -149,6 +240,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.safeContainer}>
+      <OfflineBanner />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Fondo limpio sin gradiente azul */}

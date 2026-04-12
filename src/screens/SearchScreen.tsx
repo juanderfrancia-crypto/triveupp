@@ -17,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useRoutes, Route } from '../hooks/useRoutes'
 import { useAppStore } from '../store/useAppStore'
+import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import OfflineBanner from '../components/OfflineBanner'
 
 export default function SearchScreen() {
   const navigation = useNavigation()
@@ -68,8 +70,32 @@ export default function SearchScreen() {
         destination && destination.length > 0 ? destination : undefined,
         type,
       )
-    } catch (err) {
-      Alert.alert('Error', 'No se pudieron cargar las rutas')
+    } catch (err: any) {
+      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'search_routes' }
+        )
+      } else if (err.message?.includes('not found')) {
+        errorHandler.handle(
+          'No hay rutas disponibles con esos criterios',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'search_no_routes', origin, destination }
+        )
+      } else {
+        errorHandler.handle(
+          err,
+          ErrorType.DATABASE,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'search_routes_error' }
+        )
+      }
     }
   }, [fetchRoutes, transportType])
 
@@ -134,6 +160,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+      <OfflineBanner />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}

@@ -8,6 +8,8 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
 import { useRoutes } from '../hooks/useRoutes'
+import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import OfflineBanner from '../components/OfflineBanner'
 
 export default function SeatSelectionScreen() {
   const navigation = useNavigation()
@@ -21,9 +23,14 @@ export default function SeatSelectionScreen() {
   const loadBookings = useCallback(async () => {
     if (!selectedRoute?.id) return
     if (!authUser) {
-      Alert.alert('Inicia sesión', 'Debes iniciar sesión para ver los asientos ocupados.', [
-        { text: 'Aceptar', onPress: () => navigation.navigate('Login' as never) }
-      ])
+      errorHandler.handle(
+        'Debes iniciar sesión para ver los asientos disponibles',
+        ErrorType.AUTH,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'seat_selection_not_authenticated' }
+      )
+      setTimeout(() => navigation.navigate('Login' as never), 1500)
       return
     }
 
@@ -32,15 +39,26 @@ export default function SeatSelectionScreen() {
 
       const currentRoute = await getRouteById(selectedRoute.id)
       if (!currentRoute) {
-        Alert.alert('Error', 'Esta ruta ya no está disponible.')
+        errorHandler.handle(
+          'Esta ruta ya no está disponible',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'route_not_found', route_id: selectedRoute.id }
+        )
+        setTimeout(() => navigation.goBack(), 1500)
         return
       }
 
       if (currentRoute.status !== 'scheduled') {
-        Alert.alert(
-          'Ruta no disponible',
-          'Esta ruta ya no está en estado programado. Por favor selecciona otra ruta.'
+        errorHandler.handle(
+          'Esta ruta ya no está disponible para reservas. Por favor selecciona otra.',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'route_not_scheduled', route_id: selectedRoute.id, status: currentRoute.status }
         )
+        setTimeout(() => navigation.goBack(), 1500)
         return
       }
 
@@ -53,33 +71,58 @@ export default function SeatSelectionScreen() {
       console.log('SeatSelection loaded bookings:', selectedRoute.id, normalizedBookings.map((b) => b.seat_number))
     } catch (error: any) {
       console.error('Error loading bookings:', error)
-      Alert.alert(
-        'No se pudieron cargar los asientos',
-        error?.message || 'Revisa tu conexión o permisos de base de datos.'
-      )
+      if (error.message?.includes('Network') || error.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'seat_selection_network' }
+        )
+      } else if (error.code) {
+        errorHandler.handleSupabaseError(error, 'load_bookings_seat_selection', { route_id: selectedRoute.id })
+      } else {
+        errorHandler.handle(
+          error,
+          ErrorType.DATABASE,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_selection_load_error' }
+        )
+      }
     } finally {
       setInitialLoading(false)
     }
-  }, [getRouteBookings, getRouteById, selectedRoute?.id, authUser])
+  }, [getRouteBookings, getRouteById, selectedRoute?.id, authUser, navigation])
 
   useEffect(() => {
     if (!selectedRoute) {
-      Alert.alert('Error', 'No hay ruta seleccionada', [
-        { text: 'Aceptar', onPress: () => navigation.goBack() }
-      ])
+      errorHandler.handle(
+        'No hay ruta seleccionada',
+        ErrorType.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'no_route_selected' }
+      )
+      setTimeout(() => navigation.goBack(), 1500)
       return
     }
 
     if (!authUser) {
-      Alert.alert('Inicia sesión', 'Debes iniciar sesión para ver los asientos ocupados.', [
-        { text: 'Aceptar', onPress: () => navigation.navigate('Login' as never) }
-      ])
+      errorHandler.handle(
+        'Debes iniciar sesión',
+        ErrorType.AUTH,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'seat_selection_auth' }
+      )
+      setTimeout(() => navigation.navigate('Login' as never), 1500)
       return
     }
 
     setSelectedSeats([])
     loadBookings()
-  }, [selectedRoute?.id, loadBookings, authUser])
+  }, [selectedRoute?.id, loadBookings, authUser, navigation])
 
   useFocusEffect(
     useCallback(() => {
@@ -125,7 +168,13 @@ export default function SeatSelectionScreen() {
 
   const handleSeatPress = (seatId: number, available: boolean) => {
     if (!available) {
-      Alert.alert('Asiento ocupado', 'Este asiento ya está reservado. Por favor elige otro.')
+      errorHandler.handle(
+        'Este asiento ya está reservado. Por favor elige otro.',
+        ErrorType.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'seat_unavailable', seat_id: seatId }
+      )
       return
     }
     toggleSeat(seatId)
@@ -133,28 +182,51 @@ export default function SeatSelectionScreen() {
 
   const handleContinue = async () => {
     if (selectedSeats.length === 0) {
-      Alert.alert('Error', 'Selecciona al menos un asiento')
+      errorHandler.handle(
+        'Selecciona al menos un asiento para continuar',
+        ErrorType.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'no_seats_selected' }
+      )
       return
     }
 
     if (!selectedRoute) return
     if (!authUser || !user) {
-      Alert.alert('Error', 'Debes iniciar sesión correctamente para reservar')
+      errorHandler.handle(
+        'Debes iniciar sesión correctamente para reservar',
+        ErrorType.AUTH,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'seat_continue_auth' }
+      )
       return
     }
 
     try {
       const currentRoute = await getRouteById(selectedRoute.id)
       if (!currentRoute) {
-        Alert.alert('Error', 'Esta ruta ya no está disponible.')
+        errorHandler.handle(
+          'Esta ruta ya no está disponible',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'route_unavailable_continue', route_id: selectedRoute.id }
+        )
+        setTimeout(() => navigation.goBack(), 1500)
         return
       }
 
       if (currentRoute.status !== 'scheduled') {
-        Alert.alert(
-          'Ruta no disponible',
-          'Esta ruta ya no está en estado programado. Vuelve a seleccionar otra ruta.'
+        errorHandler.handle(
+          'Esta ruta ya no está disponible para reservas',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'route_not_scheduled_continue', route_id: selectedRoute.id }
         )
+        setTimeout(() => navigation.goBack(), 1500)
         return
       }
 
@@ -164,9 +236,12 @@ export default function SeatSelectionScreen() {
       console.log('Attempting to reserve seats', selectedSeats, 'occupied:', Array.from(latestOccupiedSeats))
 
       if (invalidSeat) {
-        Alert.alert(
-          'Asiento no disponible',
-          `El asiento ${invalidSeat} ya fue reservado. Vuelve a seleccionar.`
+        errorHandler.handle(
+          `El asiento ${invalidSeat} ya fue reservado. Por favor vuelve a seleccionar.`,
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_conflict', seat_id: invalidSeat }
         )
         await loadBookings()
         return
@@ -196,14 +271,43 @@ export default function SeatSelectionScreen() {
         pending_booking_ids: reservedBookings.map((booking) => booking.id),
       })
 
-      navigation.navigate('Booking' as never)
+      errorHandler.handle(
+        `✅ Asientos reservados: ${selectedSeats.join(', ')}`,
+        ErrorType.UNKNOWN,
+        ErrorSeverity.LOW,
+        true,
+        { context: 'seats_reserved_success', seats: selectedSeats }
+      )
+      setTimeout(() => navigation.navigate('Booking' as never), 1000)
     } catch (error: any) {
       console.error('Error reservando asientos:', error)
       if (error.code === 'SEAT_ALREADY_RESERVED') {
-        Alert.alert('Asiento no disponible', 'Uno o más asientos ya fueron reservados. Vuelve a seleccionar.')
+        errorHandler.handle(
+          'Uno o más asientos ya fueron reservados. Por favor vuelve a seleccionar.',
+          ErrorType.VALIDATION,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_already_reserved' }
+        )
         await loadBookings()
+      } else if (error.message?.includes('Network') || error.message?.includes('Failed to fetch')) {
+        errorHandler.handle(
+          'Sin conexión a internet',
+          ErrorType.NETWORK,
+          ErrorSeverity.HIGH,
+          true,
+          { context: 'seat_reserve_network' }
+        )
+      } else if (error.code) {
+        errorHandler.handleSupabaseError(error, 'reserve_seats', { route_id: selectedRoute.id, seats: selectedSeats })
       } else {
-        Alert.alert('Error', error.message || 'Error al reservar asientos')
+        errorHandler.handle(
+          error,
+          ErrorType.DATABASE,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_reserve_error' }
+        )
       }
     }
   }

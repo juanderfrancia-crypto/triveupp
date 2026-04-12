@@ -213,20 +213,22 @@ class ErrorHandler {
       error.includes('is required') ||
       error.includes('debe') ||
       error.includes('Debes') ||
-      error.includes('no puede')
+      error.includes('no puede') ||
+      error.includes('correctos') ||
+      error.includes('inválido')
     ) {
       return error;
     }
 
-    // Mapeo de errores técnicos a mensajes amigables
+    // Mapeo de errores técnicos a mensajes amigables en español
     const messages: Record<ErrorType, string> = {
-      [ErrorType.NETWORK]: 'Problema de conexión - verifica tu internet',
-      [ErrorType.AUTH]: 'Error de autenticación - intenta iniciar sesión de nuevo',
-      [ErrorType.VALIDATION]: 'Los datos proporcionados no son válidos',
-      [ErrorType.DATABASE]: 'Error en la base de datos - intenta más tarde',
-      [ErrorType.PAYMENT]: 'No se pudo procesar el pago - intenta de nuevo',
-      [ErrorType.FILE]: 'Problema al procesar el archivo',
-      [ErrorType.UNKNOWN]: 'Ocurrió un error inesperado - intenta de nuevo',
+      [ErrorType.NETWORK]: '📡 Sin conexión a internet. Verifica tu WiFi o datos móviles.',
+      [ErrorType.AUTH]: '🔐 Error de autenticación. Por favor inicia sesión de nuevo.',
+      [ErrorType.VALIDATION]: '✏️ Algunos datos no son válidos. Revisa la información.',
+      [ErrorType.DATABASE]: '🔧 Tuvimos un problema. Por favor intenta más tarde.',
+      [ErrorType.PAYMENT]: '💳 No pudimos procesar el pago. Intenta con otro método.',
+      [ErrorType.FILE]: '📁 Problema al procesar el archivo. Intenta de nuevo.',
+      [ErrorType.UNKNOWN]: '⚠️ Algo salió mal. Por favor intenta de nuevo.',
     };
 
     return messages[type] || messages[ErrorType.UNKNOWN];
