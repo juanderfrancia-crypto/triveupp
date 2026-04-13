@@ -122,10 +122,13 @@ export const useRoutes = () => {
       setLoading(true);
 
       const isDriverRatingSort = sortBy === 'driver_rating';
+      const now = new Date().toISOString(); // Solo rutas futuras
+      
       let query = supabase
         .from('routes')
         .select('*')
-        .eq('status', 'scheduled');
+        .eq('status', 'scheduled')
+        .gt('departure_time', now); // Filtro: solo viajes que no han pasado
 
       if (vehicleType && vehicleType !== 'all') {
         query = query.eq('vehicle_type', vehicleType);

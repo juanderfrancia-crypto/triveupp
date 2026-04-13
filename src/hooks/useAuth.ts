@@ -52,7 +52,7 @@ export const useAuth = () => {
 
         const { data: insertedProfile, error: insertError } = await supabase
           .from("profiles")
-          .insert([
+          .upsert([
             {
               id: currentSession.user.id,
               name: userName,
@@ -61,7 +61,7 @@ export const useAuth = () => {
               role: "passenger",
               rating: 0,
             },
-          ])
+          ], { onConflict: 'id' })
           .select()
           .single();
 
@@ -217,6 +217,52 @@ export const useAuth = () => {
     }
   }
 
+  const sendEmailVerification = async (email: string) => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      // Supabase envía automáticamente email de confirmación
+      // Este método fuerza el reenvío
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      const message = err.message || "Error enviando email de verificación";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmEmail = async (email: string, token: string) => {
+    try {
+      setError(null);
+      setLoading(true);
+
+      // Verificar el token confirmado
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (err: any) {
+      const message = err.message || "Código de verificación inválido";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const register = async (
     email: string,
     password: string,
@@ -227,10 +273,16 @@ export const useAuth = () => {
       setError(null);
       setLoading(true);
 
-      // Create auth user
+      // Create auth user - Supabase automáticamente envía email de verificación
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: name,
+            phone,
+          },
+        },
       });
 
       if (authError) throw authError;
@@ -239,7 +291,7 @@ export const useAuth = () => {
       if (authData.user) {
         const { error: profileError } = await supabase
           .from("profiles")
-          .insert([
+          .upsert([
             {
               id: authData.user.id,
               name,
@@ -247,7 +299,7 @@ export const useAuth = () => {
               phone,
               role: "passenger",
             },
-          ]);
+          ], { onConflict: 'id' });
 
         if (profileError) throw profileError;
       }
@@ -296,6 +348,8 @@ export const useAuth = () => {
     logout,
     signInWithOTP,
     verifyOTP,
+    sendEmailVerification,
+    confirmEmail,
     signInWithApple,
     handleGoogleLogin,
     isAuthenticated: !!session,

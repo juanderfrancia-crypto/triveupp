@@ -234,6 +234,80 @@ export default function SearchScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Transport Type Filter */}
+          <View style={styles.transportTypeContainer}>
+            <TouchableOpacity
+              style={[styles.transportTypeTab, transportType === 'all' && styles.transportTypeTabActive]}
+              onPress={() => setTransportType('all')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="car"
+                size={14}
+                color={transportType === 'all' ? '#FFFFFF' : '#1F2937'}
+              />
+              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'all' && styles.transportTypeTextActive]}>
+                Todos
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.transportTypeTab, transportType === 'auto' && styles.transportTypeTabActive]}
+              onPress={() => setTransportType('auto')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="car-sport"
+                size={14}
+                color={transportType === 'auto' ? '#FFFFFF' : '#1F2937'}
+              />
+              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'auto' && styles.transportTypeTextActive]}>
+                Auto
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.transportTypeTab, transportType === 'taxi' && styles.transportTypeTabActive]}
+              onPress={() => setTransportType('taxi')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="car"
+                size={14}
+                color={transportType === 'taxi' ? '#FFFFFF' : '#1F2937'}
+              />
+              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'taxi' && styles.transportTypeTextActive]}>
+                Taxi
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.transportTypeTab, transportType === 'busetica' && styles.transportTypeTabActive]}
+              onPress={() => setTransportType('busetica')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="bus"
+                size={14}
+                color={transportType === 'busetica' ? '#FFFFFF' : '#1F2937'}
+              />
+              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'busetica' && styles.transportTypeTextActive]}>
+                Busetica
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.transportTypeTab, transportType === 'buseta' && styles.transportTypeTabActive]}
+              onPress={() => setTransportType('buseta')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="bus"
+                size={14}
+                color={transportType === 'buseta' ? '#FFFFFF' : '#1F2937'}
+              />
+              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'buseta' && styles.transportTypeTextActive]}>
+                Buseta
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Content */}
@@ -515,6 +589,44 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+
+  // Transport Type Filter
+  transportTypeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    justifyContent: 'flex-start',
+  },
+  transportTypeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: '#F3F4F6',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    minHeight: 42,
+  },
+  transportTypeTabActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    ...SHADOWS.md,
+  },
+  transportTypeText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  transportTypeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 
   // Loading

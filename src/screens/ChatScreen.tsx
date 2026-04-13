@@ -7,11 +7,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
+import * as FileSystem from 'expo-file-system'
 import { useAuth } from '../hooks/useAuth'
 import { useChat } from '../hooks/useChat'
+import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { ChatBubble } from '../components/ChatBubble'
+import { sendAudioMessage, markAudioAsListened } from '../services/messages'
 import { useRoute } from '@react-navigation/native'
 
 const ChatScreen = ({ navigation }: any) => {
@@ -29,7 +34,9 @@ const ChatScreen = ({ navigation }: any) => {
     error,
     setCurrentOtherUserId,
   } = useChat(user?.id)
+  const { isRecording, startRecording, stopRecording, cancelRecording } = useAudioRecorder()
   const [inputText, setInputText] = useState('')
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false)
 
   useEffect(() => {
     const otherUserId = route.params?.otherUserId as string | undefined
@@ -103,16 +110,15 @@ const ChatScreen = ({ navigation }: any) => {
       alignItems: 'center',
       justifyContent: 'space-between',
     },
-    backButton: {
-      fontSize: 18,
+    backButtonContainer: {
+      padding: 8,
       marginRight: 12,
-      color: '#007AFF',
-      fontWeight: '600',
     },
     chatHeaderTitle: {
       fontSize: 18,
       fontWeight: '600',
       flex: 1,
+      textAlign: 'center',
     },
     inputContainer: {
       flexDirection: 'row',
@@ -172,6 +178,54 @@ const ChatScreen = ({ navigation }: any) => {
       marginBottom: 12,
       color: '#333',
     },
+    emptyStateContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+    },
+    emptyStateIcon: {
+      fontSize: 64,
+      marginBottom: 16,
+    },
+    emptyStateTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#333',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    emptyStateDescription: {
+      fontSize: 14,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 24,
+      lineHeight: 20,
+    },
+    ctaButton: {
+      backgroundColor: '#007AFF',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 20,
+      marginBottom: 16,
+    },
+    ctaButtonText: {
+      color: 'white',
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    refreshButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#007AFF',
+    },
+    refreshButtonText: {
+      color: '#007AFF',
+      fontWeight: '600',
+      fontSize: 13,
+    },
   })
 
   // VISTA 1: LISTA DE CONVERSACIONES
@@ -184,6 +238,16 @@ const ChatScreen = ({ navigation }: any) => {
               <Text style={styles.title}>Mensajes</Text>
               {unreadCount > 0 && <Text style={{ color: '#007AFF', fontSize: 14 }}>({unreadCount} no leídos)</Text>}
             </View>
+            <TouchableOpacity 
+              onPress={() => {
+                // Recargar pantalla
+                setCurrentOtherUserId(null)
+                setInputText('')
+              }}
+              style={{ padding: 8 }}
+            >
+              <Ionicons name="refresh" size={24} color="#007AFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -222,11 +286,32 @@ const ChatScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No hay conversaciones aún</Text>
-              <Text style={{ color: '#999', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
-                Aquí puedes iniciar un chat con conductores o pasajeros de tus viajes recientes.
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateIcon}>💬</Text>
+              <Text style={styles.emptyStateTitle}>No hay mensajes aún</Text>
+              <Text style={styles.emptyStateDescription}>
+                Los chats aparecerán aquí después de que tengas viajes completados.{'\n\n'}Cuando viajes con otros usuarios, podrás enviarles mensajes y notas de voz.
               </Text>
+              
+              {/* CTA Buttons */}
+              <TouchableOpacity 
+                style={styles.ctaButton}
+                onPress={() => navigation.navigate('Search')}
+              >
+                <Text style={styles.ctaButtonText}>🔍 Buscar un viaje</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.refreshButton}
+                onPress={async () => {
+                  // Recargar recargando la pantalla completa
+                  setCurrentOtherUserId(null)
+                  // Forzar re-render
+                  setInputText('')
+                }}
+              >
+                <Text style={styles.refreshButtonText}>↻ Recargar</Text>
+              </TouchableOpacity>
             </View>
           }
         />
@@ -243,10 +328,14 @@ const ChatScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.chatHeader}>
-        <TouchableOpacity onPress={() => setCurrentOtherUserId(null)}>
-          <Text style={styles.backButton}>← Atrás</Text>
+        <TouchableOpacity 
+          onPress={() => setCurrentOtherUserId(null)}
+          style={styles.backButtonContainer}
+        >
+          <Ionicons name="chevron-back" size={28} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.chatHeaderTitle}>{otherUserName}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Mensajes */}
@@ -261,9 +350,21 @@ const ChatScreen = ({ navigation }: any) => {
           renderItem={({ item }) => (
             <ChatBubble
               message={item.message}
+              messageType={item.message_type || 'text'}
+              audioUrl={item.audio_url}
+              audioDuration={item.audio_duration}
+              isAudioListened={item.is_audio_listened}
               isFromMe={item.from_user_id === user?.id}
               timestamp={item.created_at}
               isRead={item.is_read}
+              onAudioPlay={() => {
+                // Marcar como escuchado cuando se reproduce
+                if (!item.is_audio_listened && item.id) {
+                  markAudioAsListened(item.id).catch(err =>
+                    console.error('Error marking audio as listened:', err)
+                  )
+                }
+              }}
             />
           )}
           style={styles.messageList}
@@ -278,25 +379,125 @@ const ChatScreen = ({ navigation }: any) => {
 
       {/* Input */}
       <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Escribe un mensaje..."
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          editable={!loading}
-          placeholderTextColor="#999"
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, { opacity: !inputText.trim() ? 0.5 : 1 }]}
-          onPress={() => {
-            send(inputText)
-            setInputText('')
-          }}
-          disabled={!inputText.trim() || loading}
-        >
-          <Text style={styles.sendButtonText}>↑</Text>
-        </TouchableOpacity>
+        {!isRecording ? (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Escribe un mensaje..."
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              editable={!loading && !isUploadingAudio}
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, { opacity: !inputText.trim() || loading ? 0.5 : 1 }]}
+              onPress={() => {
+                if (inputText.trim()) {
+                  send(inputText)
+                  setInputText('')
+                }
+              }}
+              disabled={!inputText.trim() || loading || isUploadingAudio}
+            >
+              <Text style={styles.sendButtonText}>↑</Text>
+            </TouchableOpacity>
+
+            {/* Botón de grabar audio */}
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: '#FF3B30', marginLeft: 8 }]}
+              onPress={async () => {
+                const started = await startRecording()
+                if (!started) {
+                  Alert.alert(
+                    'Error',
+                    'No se pudieron obtener permisos para acceder al micrófono'
+                  )
+                }
+              }}
+            >
+              <Ionicons name="mic" size={20} color="white" />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {/* Indicador de grabación */}
+            <View
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: '#fff9f9',
+                borderRadius: 20,
+                marginRight: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: '#FF3B30',
+                    marginRight: 8,
+                    animation: 'pulse',
+                  }}
+                />
+                <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Grabando...</Text>
+              </View>
+            </View>
+
+            {/* Botón para completar grabación */}
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: '#34C759' }]}
+              onPress={async () => {
+                if (!user?.id || !currentOtherUserId) return
+
+                const result = await stopRecording()
+                if (result) {
+                  try {
+                    setIsUploadingAudio(true)
+
+                    // Leer el archivo en base64
+                    const base64 = await FileSystem.readAsStringAsync(result.uri, {
+                      encoding: 'base64',
+                    })
+
+                    // Enviar mensaje de audio
+                    await sendAudioMessage(
+                      user.id,
+                      currentOtherUserId,
+                      base64,
+                      result.durationMs,
+                      user.name || 'Usuario'
+                    )
+
+                    // Recargar conversación
+                    await loadConversation(currentOtherUserId)
+                  } catch (err) {
+                    console.error('Error uploading audio:', err)
+                    Alert.alert('Error', 'No se pudo enviar la nota de voz')
+                  } finally {
+                    setIsUploadingAudio(false)
+                  }
+                }
+              }}
+              disabled={isUploadingAudio}
+            >
+              <Ionicons name="checkmark" size={20} color="white" />
+            </TouchableOpacity>
+
+            {/* Botón para cancelar grabación */}
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: '#888', marginLeft: 8 }]}
+              onPress={async () => {
+                await cancelRecording()
+              }}
+            >
+              <Ionicons name="close" size={20} color="white" />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}

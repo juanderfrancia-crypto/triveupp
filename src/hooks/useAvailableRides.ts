@@ -40,9 +40,11 @@ export const useAvailableRides = () => {
       setLoading(true)
       setError(null)
 
+      const now = new Date().toISOString()
       const { data, error: fetchError } = await supabase
         .from('available_rides')
         .select('*')
+        .gt('departure_time', now)
         .order('departure_time', { ascending: true })
 
       if (fetchError) {

@@ -7,6 +7,10 @@ export interface Message {
   to_user_id: string
   booking_id?: string
   message: string
+  message_type?: 'text' | 'audio' // NUEVO: tipo de mensaje
+  audio_url?: string // NUEVO: URL del audio en Storage
+  audio_duration?: number // NUEVO: duración en ms
+  is_audio_listened?: boolean // NUEVO: si ya se escuchó
   is_read: boolean
   read_at?: string
   created_at: string
@@ -353,6 +357,121 @@ export const deleteConversation = async (userId: string, otherUserId: string): P
     if (error) throw error
   } catch (err: any) {
     console.error('Error deleting conversation:', err)
+    throw err
+  }
+}
+
+// ============================================
+// ENVIAR MENSAJE DE AUDIO
+// ============================================
+
+export const sendAudioMessage = async (
+  fromUserId: string,
+  toUserId: string,
+  audioBase64: string,
+  durationMs: number,
+  senderName?: string,
+  bookingId?: string
+): Promise<Message> => {
+  try {
+    // Validar que no se envíe a sí mismo
+    if (fromUserId === toUserId) {
+      throw new Error('No puedes enviarte un mensaje a ti mismo')
+    }
+
+    if (!fromUserId || !toUserId) {
+      throw new Error('IDs de usuario inválidos')
+    }
+
+    // 1. Subir archivo de audio a Storage
+    const filename = `${fromUserId}_${Date.now()}.m4a`
+    const { error: uploadError } = await supabase.storage
+      .from('audio-messages')
+      .upload(filename, Buffer.from(audioBase64, 'base64'), {
+        contentType: 'audio/m4a',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError)
+      throw new Error(`Error al subir audio: ${uploadError.message}`)
+    }
+
+    // 2. Obtener URL pública
+    const { data: publicUrl } = supabase.storage
+      .from('audio-messages')
+      .getPublicUrl(filename)
+
+    if (!publicUrl) {
+      throw new Error('No se pudo obtener URL del audio')
+    }
+
+    // 3. Guardar mensaje en DB con tipo 'audio'
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
+        message: `[Nota de voz: ${(durationMs / 1000).toFixed(1)}s]`,
+        message_type: 'audio',
+        audio_url: publicUrl.publicUrl,
+        audio_duration: durationMs,
+        is_audio_listened: false,
+        booking_id: bookingId,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    // 4. Enviar notificación push
+    try {
+      const { data: recipientProfile } = await supabase
+        .from('profiles')
+        .select('push_token, name')
+        .eq('id', toUserId)
+        .single()
+
+      if (recipientProfile?.push_token) {
+        await sendPushNotificationToUser(
+          recipientProfile.push_token,
+          `Nota de voz de ${senderName || 'Usuario'}`,
+          `Nota de voz - ${(durationMs / 1000).toFixed(1)}s`,
+          {
+            type: 'message',
+            from_user_id: fromUserId,
+            sender_name: senderName,
+            message_id: data.id,
+            message_type: 'audio',
+          }
+        )
+      }
+    } catch (pushErr) {
+      console.error('Error sending push notification:', pushErr)
+      // No fallar si la notificación push falla
+    }
+
+    return data
+  } catch (err: any) {
+    console.error('Error sending audio message:', err)
+    throw err
+  }
+}
+
+// ============================================
+// MARCAR AUDIO COMO ESCUCHADO
+// ============================================
+
+export const markAudioAsListened = async (messageId: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_audio_listened: true })
+      .eq('id', messageId)
+
+    if (error) throw error
+  } catch (err: any) {
+    console.error('Error marking audio as listened:', err)
     throw err
   }
 }

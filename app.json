@@ -16,7 +16,12 @@
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.traive.triveapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,6 +35,11 @@
           "locationAlwaysAndWhenInUsePermission": "Trive necesita tu ubicación para mostrar el progreso del viaje"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "faef6fc0-d924-4ffb-94d4-149eb1bf62d9"
+      }
+    }
   }
 }

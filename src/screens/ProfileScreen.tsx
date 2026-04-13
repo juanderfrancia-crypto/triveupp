@@ -128,10 +128,6 @@ export default function ProfileScreen() {
     }
   }
 
-  const handleOpenChat = () => {
-    navigation.navigate('Chat' as never)
-  }
-
   const handleProfilePhotoUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -537,16 +533,6 @@ export default function ProfileScreen() {
           <Text style={styles.adminBtnText}>Verificar Documentos</Text>
         </TouchableOpacity>
       )}
-
-      <TouchableOpacity
-        style={styles.chatBtn}
-        onPress={handleOpenChat}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="chatbubble-ellipses-outline" size={20} color={COLORS.primary} />
-        <Text style={styles.chatBtnText}>Mensajes</Text>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.logoutBtn}
@@ -1056,28 +1042,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.primary,
     fontWeight: '600',
-  },
-
-  chatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.md,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOWS.sm,
-  },
-  chatBtnText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-    flex: 1,
   },
 
   logoutBtn: {

@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import HomeScreen from '../screens/HomeScreen'
 import SearchScreen from '../screens/SearchScreen'
+import ChatScreen from '../screens/ChatScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 
@@ -19,6 +20,8 @@ export default function TabNavigator() {
             iconName = focused ? 'home' : 'home-outline'
           } else if (route.name === 'Search') {
             iconName = focused ? 'search' : 'search-outline'
+          } else if (route.name === 'Messages') {
+            iconName = focused ? 'chatbubble' : 'chatbubble-outline'
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline'
           }
@@ -59,6 +62,7 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Inicio' }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'Buscar' }} />
+      <Tab.Screen name="Messages" component={ChatScreen} options={{ title: 'Mensajes' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
     </Tab.Navigator>
   )

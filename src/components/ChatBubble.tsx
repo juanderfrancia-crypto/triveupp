@@ -1,11 +1,17 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { AudioMessage } from './AudioMessage'
 
 interface ChatBubbleProps {
   message: string
+  messageType?: 'text' | 'audio'
+  audioUrl?: string
+  audioDuration?: number
+  isAudioListened?: boolean
   isFromMe: boolean
   timestamp: string
   isRead?: boolean
+  onAudioPlay?: () => void
 }
 
 // Función simple para formatear distancia de tiempo
@@ -20,7 +26,17 @@ const formatTimeAgo = (dateString: string): string => {
   return `hace ${Math.floor(seconds / 86400)}d`
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isFromMe, timestamp, isRead }) => {
+export const ChatBubble: React.FC<ChatBubbleProps> = ({
+  message,
+  messageType = 'text',
+  audioUrl,
+  audioDuration,
+  isAudioListened,
+  isFromMe,
+  timestamp,
+  isRead,
+  onAudioPlay,
+}) => {
   const styles = StyleSheet.create({
     bubbleContainer: {
       flexDirection: 'row',
@@ -47,13 +63,27 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isFromMe, times
       color: '#999',
       fontSize: 12,
     },
+    audioBubble: {
+      paddingHorizontal: 0,
+      paddingVertical: 0,
+      backgroundColor: 'transparent',
+    },
   })
 
   return (
     <View>
       <View style={styles.bubbleContainer}>
-        <View style={styles.bubble}>
-          <Text style={styles.bubbleText}>{message}</Text>
+        <View style={[styles.bubble, messageType === 'audio' && styles.audioBubble]}>
+          {messageType === 'audio' && audioUrl && audioDuration ? (
+            <AudioMessage
+              audioUrl={audioUrl}
+              duration={audioDuration}
+              listened={!isAudioListened}
+              onPlayComplete={onAudioPlay}
+            />
+          ) : (
+            <Text style={styles.bubbleText}>{message}</Text>
+          )}
         </View>
       </View>
       <Text style={styles.timestamp}>{formatTimeAgo(timestamp)}</Text>

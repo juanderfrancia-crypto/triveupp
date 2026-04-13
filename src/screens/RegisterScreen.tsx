@@ -78,27 +78,16 @@ export default function RegisterScreen() {
       )
 
       if (data?.user) {
-        // Fetch the created profile
-        const { data: profile } = await (await import('../services/supabase')).supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single()
-
-        if (profile) {
-          setUser({
-            id: profile.id,
-            name: profile.name,
-            email: profile.email,
-            phone: profile.phone,
-            role: profile.role,
-            rating: profile.rating,
-          })
-        }
-
-        setAuthUser(data.user)
-        Alert.alert('Éxito', 'Cuenta creada correctamente')
-        // Navigation happens automatically when auth state changes
+        // Guardar estado de verificación pendiente
+        const { setPendingVerification } = useAppStore.getState()
+        setPendingVerification(email.trim(), name.trim(), phone.trim())
+        
+        // Navegar a pantalla de verificación de email
+        navigation.navigate('VerifyEmail' as never, {
+          email: email.trim(),
+          name: name.trim(),
+          phone: phone.trim(),
+        } as never)
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Error al crear la cuenta')

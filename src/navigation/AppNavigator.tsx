@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import TabNavigator from './TabNavigator'
 import LoginScreen from '../screens/LoginScreen'
 import LoginPhoneScreen from '../screens/LoginPhoneScreen'
 import RegisterScreen from '../screens/RegisterScreen'
+import VerifyEmailScreen from '../screens/VerifyEmailScreen'
 import SeatSelectionScreen from '../screens/SeatSelectionScreen'
 import BookingScreen from '../screens/BookingScreen'
 import ChatScreen from '../screens/ChatScreen'
@@ -50,19 +52,47 @@ export default function AppNavigator() {
   const { isAuthenticated } = useAppStore()
   const { session, loading: authLoading } = useAuth()
   const [mounted, setMounted] = useState(false)
+  const [stateRestored, setStateRestored] = useState(false)
   const hasSeenOnboarding = useAppStore((state) => state.hasSeenOnboarding)
+  const pendingVerificationEmail = useAppStore((state) => state.pendingVerificationEmail)
   const setHasSeenOnboarding = useAppStore((state) => state.setHasSeenOnboarding)
+  const setPendingVerification = useAppStore((state) => state.setPendingVerification)
+
+  // Restaurar estado persistido de AsyncStorage
+  useEffect(() => {
+    const restoreState = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('hasSeenOnboarding')
+        if (stored !== null) {
+          setHasSeenOnboarding(JSON.parse(stored))
+        }
+
+        const pendingVerif = await AsyncStorage.getItem('pendingVerification')
+        if (pendingVerif !== null) {
+          const { email, name, phone } = JSON.parse(pendingVerif)
+          setPendingVerification(email, name, phone)
+        }
+      } catch (err) {
+        console.error('Error restaurando estado:', err)
+      } finally {
+        setStateRestored(true)
+      }
+    }
+
+    restoreState()
+  }, [setHasSeenOnboarding, setPendingVerification])
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 100)
     return () => clearTimeout(timer)
   }, [])
 
-  if (!mounted || authLoading) {
+  if (!mounted || authLoading || !stateRestored) {
     return <LoadingScreen />
   }
 
-  // Mostrar onboarding si no lo ha visto
+  // Mostrar onboarding si no lo ha visto (SIEMPRE, incluso si hay verificación pendiente)
+  // Esto permite que el usuario pueda reiniciar el proceso
   if (!hasSeenOnboarding) {
     return (
       <OnboardingScreen
@@ -77,19 +107,30 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isUserAuthenticated && (
+        {/* Si hay verificación pendiente pero no está autenticado, mostrar SOLO VerifyEmail */}
+        {!isUserAuthenticated && pendingVerificationEmail ? (
+          <>
+            <Stack.Screen 
+              name="VerifyEmail" 
+              component={VerifyEmailScreen}
+              options={{
+                animationEnabled: true,
+                cardStyle: { backgroundColor: '#fff' }
+              }}
+            />
+            {/* Permitir volver a Register desde VerifyEmail */}
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
+        ) : !isUserAuthenticated ? (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="LoginPhone" component={LoginPhoneScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="RecoveryAccount" component={RecoveryAccountScreen} />
           </>
-        )}
-
-        {isUserAuthenticated && <Stack.Screen name="Main" component={TabNavigator} />}
-
-        {isUserAuthenticated && (
+        ) : (
           <>
+            <Stack.Screen name="Main" component={TabNavigator} />
             <Stack.Screen name="AvailableRides" component={AvailableRidesScreen} />
             <Stack.Screen name="SeatSelection" component={SeatSelectionScreen} />
             <Stack.Screen name="Booking" component={BookingScreen} />
@@ -125,6 +166,18 @@ export default function AppNavigator() {
             <Stack.Screen name="LearningCenter" component={LearningCenterScreen} />
             <Stack.Screen name="BugReport" component={BugReportScreen} />
           </>
+        )}
+
+        {/* VerifyEmail screen siempre disponible - para navegación desde Register */}
+        {!isUserAuthenticated && !pendingVerificationEmail && (
+          <Stack.Screen 
+            name="VerifyEmail" 
+            component={VerifyEmailScreen}
+            options={{
+              animationEnabled: true,
+              cardStyle: { backgroundColor: '#fff' }
+            }}
+          />
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -20,7 +20,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useRoutes, Route } from '../hooks/useRoutes'
 import { useNotifications } from '../hooks/useNotifications'
 import { useFocusEffect } from '@react-navigation/native'
-import { useUserLocation } from '../hooks/useUserLocation'
+// import { useUserLocation } from '../hooks/useUserLocation' // ❌ GEOLOCALIZACIÓN DESHABILITADA
 import {
   calculateTripProgress,
   getTripStatusMessage,
@@ -47,65 +47,9 @@ export default function HomeScreen() {
   const [locationStatus, setLocationStatus] = useState<string>('')
   const [hasActiveTrip, setHasActiveTrip] = useState<boolean>(false)
   
-  // Obtener ubicación del usuario
-  const { location: userLocation, loading: locationLoading, error: locationError } = useUserLocation(5)
-  
   // Animación del carro
   const carPositionAnim = useRef(new Animated.Value(0)).current
   const realTripProgressAnim = useRef(new Animated.Value(0)).current
-  
-
-  
-  // Calcular progreso real del viaje si hay viaje activo, o demo
-  useEffect(() => {
-    if (!userLocation) {
-      return
-    }
-    
-    let progress
-    let status
-    
-    // Si hay viaje activo, usar coordenadas reales
-    if (selectedRoute) {
-      const originCoords = getCoordinatesFromLocationName(selectedRoute.origin)
-      const destCoords = getCoordinatesFromLocationName(selectedRoute.destination)
-      
-      if (originCoords && destCoords) {
-        progress = calculateTripProgress(
-          userLocation.latitude,
-          userLocation.longitude,
-          originCoords.latitude,
-          originCoords.longitude,
-          destCoords.latitude,
-          destCoords.longitude
-        )
-        status = getTripStatusMessage(
-          userLocation.latitude,
-          userLocation.longitude,
-          selectedRoute.origin,
-          selectedRoute.destination,
-          progress
-        )
-        setHasActiveTrip(true)
-      } else {
-        // Fallback si no tenemos coords
-        setHasActiveTrip(false)
-      }
-    }
-    
-    // Si no hay viaje o no tenemos coords, limpiar
-    if (!selectedRoute || !progress) {
-      setHasActiveTrip(false)
-      return
-    }
-    
-    // Actualizar dinero y estado del viaje si hay ruta activa
-    if (progress) {
-      setTripProgress(progress.progressPercent)
-      setLocationStatus(status)
-      setHasActiveTrip(true)
-    }
-  }, [userLocation, realTripProgressAnim, selectedRoute])
   
   const balance = useAppStore((state) => state.balance)
   const user = useAppStore((state) => state.user)
