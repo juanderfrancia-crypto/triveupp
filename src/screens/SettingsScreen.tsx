@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { useAuth } from '../hooks/useAuth'
 import {
   authenticateBiometric,
   getStoredBiometricEnabled,
@@ -11,31 +12,93 @@ import {
   isBiometricSupported,
   setStoredBiometricEnabled,
 } from '../services/biometricAuth'
+import {
+  loadNotificationPreferences,
+  updateNotificationPreference,
+  createDefaultPreferences,
+} from '../services/notificationPreferences'
 
 export default function SettingsScreen() {
   const navigation = useNavigation()
+  const { user } = useAuth()
   const [pushNotifications, setPushNotifications] = useState(true)
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [smsNotifications, setSmsNotifications] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
   const [biometric, setBiometric] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(true)
+  const [loadingPrefs, setLoadingPrefs] = useState(true)
 
   useEffect(() => {
-    const loadBiometric = async () => {
-      const supported = await isBiometricSupported()
-      setBiometricAvailable(supported)
-      if (!supported) {
-        setBiometric(false)
-        return
-      }
+    const loadPreferences = async () => {
+      try {
+        // Cargar preferencias biométricas
+        const supported = await isBiometricSupported()
+        setBiometricAvailable(supported)
+        if (!supported) {
+          setBiometric(false)
+        } else {
+          const enabled = await getStoredBiometricEnabled()
+          setBiometric(enabled)
+        }
 
-      const enabled = await getStoredBiometricEnabled()
-      setBiometric(enabled)
+        // Cargar preferencias de notificaciones
+        if (!user?.id) return
+
+        let prefs = await loadNotificationPreferences(user.id)
+        
+        // Si no existen, crearlas por defecto
+        if (!prefs) {
+          await createDefaultPreferences(user.id)
+          prefs = await loadNotificationPreferences(user.id)
+        }
+
+        if (prefs) {
+          setPushNotifications(prefs.push_notifications)
+          setEmailNotifications(prefs.email_notifications)
+          setSmsNotifications(prefs.sms_notifications)
+        }
+      } catch (err) {
+        console.error('Error loading preferences:', err)
+      } finally {
+        setLoadingPrefs(false)
+      }
     }
 
-    loadBiometric()
-  }, [])
+    loadPreferences()
+  }, [user?.id])
+
+  const handlePushNotificationsChange = async (value: boolean) => {
+    setPushNotifications(value)
+    if (user?.id) {
+      const success = await updateNotificationPreference(user.id, 'push_notifications', value)
+      if (!success) {
+        Alert.alert('Error', 'No se pudo guardar la preferencia')
+        setPushNotifications(!value)
+      }
+    }
+  }
+
+  const handleEmailNotificationsChange = async (value: boolean) => {
+    setEmailNotifications(value)
+    if (user?.id) {
+      const success = await updateNotificationPreference(user.id, 'email_notifications', value)
+      if (!success) {
+        Alert.alert('Error', 'No se pudo guardar la preferencia')
+        setEmailNotifications(!value)
+      }
+    }
+  }
+
+  const handleSmsNotificationsChange = async (value: boolean) => {
+    setSmsNotifications(value)
+    if (user?.id) {
+      const success = await updateNotificationPreference(user.id, 'sms_notifications', value)
+      if (!success) {
+        Alert.alert('Error', 'No se pudo guardar la preferencia')
+        setSmsNotifications(!value)
+      }
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -68,7 +131,7 @@ export default function SettingsScreen() {
             </View>
             <Switch 
               value={pushNotifications}
-              onValueChange={setPushNotifications}
+              onValueChange={handlePushNotificationsChange}
               trackColor={{ false: COLORS.borderLight, true: COLORS.primary + '30' }}
               thumbColor={pushNotifications ? COLORS.primary : COLORS.textTertiary}
             />
@@ -86,7 +149,7 @@ export default function SettingsScreen() {
             </View>
             <Switch 
               value={emailNotifications}
-              onValueChange={setEmailNotifications}
+              onValueChange={handleEmailNotificationsChange}
               trackColor={{ false: COLORS.borderLight, true: COLORS.primary + '30' }}
               thumbColor={emailNotifications ? COLORS.primary : COLORS.textTertiary}
             />
@@ -104,7 +167,7 @@ export default function SettingsScreen() {
             </View>
             <Switch 
               value={smsNotifications}
-              onValueChange={setSmsNotifications}
+              onValueChange={handleSmsNotificationsChange}
               trackColor={{ false: COLORS.borderLight, true: COLORS.primary + '30' }}
               thumbColor={smsNotifications ? COLORS.primary : COLORS.textTertiary}
             />
@@ -230,37 +293,16 @@ export default function SettingsScreen() {
         
         <TouchableOpacity 
           style={styles.settingCard}
+          onPress={() => navigation.navigate('TripPreferences' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>
             <View style={styles.settingIcon}>
-              <Ionicons name="moon-outline" size={20} color={COLORS.primary} />
+              <Ionicons name="car-outline" size={20} color={COLORS.primary} />
             </View>
             <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Modo Oscuro</Text>
-              <Text style={styles.settingDescription}>Ahorra batería en la noche</Text>
-            </View>
-            <Switch 
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: COLORS.borderLight, true: COLORS.primary + '30' }}
-              thumbColor={darkMode ? COLORS.primary : COLORS.textTertiary}
-            />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.settingCard}
-          onPress={() => navigation.navigate('Language' as never)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingHeader}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="globe-outline" size={20} color={COLORS.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Idioma</Text>
-              <Text style={styles.settingDescription}>Español (Colombia)</Text>
+              <Text style={styles.settingLabel}>Mi Experiencia de Viaje</Text>
+              <Text style={styles.settingDescription}>Personaliza tus preferencias</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </View>

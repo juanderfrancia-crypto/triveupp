@@ -128,6 +128,42 @@ export const useBookings = () => {
         .select();
 
       if (error) throw error;
+
+      // Contar cuántos asientos se confirmaron y actualizar available_seats
+      if (data && data.length > 0) {
+        const routeId = data[0].route_id;
+        const seatsConfirmed = data.length;
+
+        try {
+          // Obtener el valor actual de available_seats
+          const { data: routeData, error: fetchError } = await supabase
+            .from('routes')
+            .select('available_seats')
+            .eq('id', routeId)
+            .single();
+
+          if (fetchError) throw fetchError;
+
+          if (routeData) {
+            // Calcular nuevos asientos disponibles
+            const newAvailableSeats = Math.max(0, routeData.available_seats - seatsConfirmed);
+            
+            // Actualizar la tabla routes
+            const { error: updateError } = await supabase
+              .from('routes')
+              .update({ available_seats: newAvailableSeats })
+              .eq('id', routeId);
+
+            if (updateError) {
+              console.warn('Error actualizando available_seats:', updateError);
+            }
+          }
+        } catch (err) {
+          console.warn('Error en actualización de available_seats:', err);
+          // No lanzar error aquí, la reserva ya se confirmó
+        }
+      }
+
       return (data as Booking[]) || [];
     } catch (err: any) {
       const message = err.message || 'Error confirmando reserva';
@@ -153,6 +189,24 @@ export const useBookings = () => {
       if (error) throw error;
 
       const releasedCount = (data as any[]).length || 0;
+
+      // Incrementar available_seats cuando se liberan reservas
+      if (releasedCount > 0) {
+        const { data: routeData } = await supabase
+          .from('routes')
+          .select('available_seats, total_seats')
+          .eq('id', routeId)
+          .single();
+
+        if (routeData) {
+          const newAvailableSeats = Math.min(routeData.total_seats, routeData.available_seats + releasedCount);
+          await supabase
+            .from('routes')
+            .update({ available_seats: newAvailableSeats })
+            .eq('id', routeId);
+        }
+      }
+
       return data;
     } catch (err: any) {
       const message = err.message || 'Error liberando reservas pendientes';
@@ -269,6 +323,23 @@ export const useBookings = () => {
         .eq("id", bookingId);
 
       if (updateError) throw updateError;
+
+      // Incrementar available_seats cuando se cancela una reserva confirmada
+      if (bookingData.route_id) {
+        const { data: routeData } = await supabase
+          .from('routes')
+          .select('available_seats, total_seats')
+          .eq('id', bookingData.route_id)
+          .single();
+
+        if (routeData) {
+          const newAvailableSeats = Math.min(routeData.total_seats, routeData.available_seats + 1);
+          await supabase
+            .from('routes')
+            .update({ available_seats: newAvailableSeats })
+            .eq('id', bookingData.route_id);
+        }
+      }
 
       return bookingData;
     } catch (err: any) {

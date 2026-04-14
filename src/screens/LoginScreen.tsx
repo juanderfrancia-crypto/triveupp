@@ -21,6 +21,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import { logLogin } from '../services/activityLogger'
 import OfflineBanner from '../components/OfflineBanner'
 
 export default function LoginScreen() {
@@ -81,6 +82,9 @@ export default function LoginScreen() {
           })
         }
         setAuthUser(data.user)
+        
+        // Registrar actividad de login
+        await logLogin(data.user.id)
       }
     } catch (err: any) {
       // Detectar tipo de error

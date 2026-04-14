@@ -38,8 +38,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "faef6fc0-d924-4ffb-94d4-149eb1bf62d9"
+        "projectId": "e96c93aa-7f2b-45e1-bdf0-d60e07577512"
       }
-    }
+    },
+    "owner": "traive"
   }
 }

@@ -22,6 +22,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import { logLogin } from '../services/activityLogger'
 import OfflineBanner from '../components/OfflineBanner'
 import Toast from '../components/Toast'
 
@@ -174,6 +175,10 @@ export default function LoginPhoneScreen() {
           })
         }
         setAuthUser(data.user)
+        
+        // Registrar actividad de login
+        await logLogin(data.user.id)
+        
         errorHandler.handle(
           '✅ Inicio de sesión exitoso',
           ErrorType.UNKNOWN,

@@ -271,14 +271,16 @@ export default function SeatSelectionScreen() {
         pending_booking_ids: reservedBookings.map((booking) => booking.id),
       })
 
-      errorHandler.handle(
-        `✅ Asientos reservados: ${selectedSeats.join(', ')}`,
-        ErrorType.UNKNOWN,
-        ErrorSeverity.LOW,
-        true,
-        { context: 'seats_reserved_success', seats: selectedSeats }
+      Alert.alert(
+        '✅ ¡Éxito!',
+        `Asientos reservados: ${selectedSeats.join(', ')}`,
+        [
+          {
+            text: 'Ver Mi Reserva',
+            onPress: () => navigation.navigate('Booking' as never),
+          },
+        ]
       )
-      setTimeout(() => navigation.navigate('Booking' as never), 1000)
     } catch (error: any) {
       console.error('Error reservando asientos:', error)
       if (error.code === 'SEAT_ALREADY_RESERVED') {

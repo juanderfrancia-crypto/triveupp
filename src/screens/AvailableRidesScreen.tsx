@@ -46,12 +46,16 @@ export default function AvailableRidesScreen() {
   }
 
   const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
+    // Si no tiene Z, agrégalo para que se interprete como UTC
+    const dateWithTimezone = dateString.includes('Z') ? dateString : dateString + 'Z'
+    const date = new Date(dateWithTimezone)
     return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   }
 
   const getMinutesUntilDeparture = (dateString: string) => {
-    const date = new Date(dateString)
+    // Si no tiene Z, agrégalo para que se interprete como UTC
+    const dateWithTimezone = dateString.includes('Z') ? dateString : dateString + 'Z'
+    const date = new Date(dateWithTimezone)
     const now = new Date()
     const diffMs = date.getTime() - now.getTime()
     const diffMins = Math.round(diffMs / 60000)
@@ -63,23 +67,21 @@ export default function AvailableRidesScreen() {
 
   const renderRideCard = ({ item: ride }: any) => (
     <View style={styles.rideCard}>
-      {/* Header: Origin → Destination */}
+      {/* Header: Origin → Destination (Horizontal) */}
       <View style={styles.routeInfo}>
         <View style={styles.routeStart}>
-          <Ionicons name="location" size={20} color={COLORS.primary} />
+          <Ionicons name="location" size={18} color={COLORS.primary} />
           <Text style={styles.routeText} numberOfLines={1}>
             {ride.origin}
           </Text>
         </View>
 
         <View style={styles.routeDash}>
-          <View style={styles.dashLine} />
-          <Ionicons name="arrow-forward" size={16} color={COLORS.secondary} />
-          <View style={styles.dashLine} />
+          <Ionicons name="arrow-forward" size={14} color={COLORS.secondary} />
         </View>
 
         <View style={styles.routeEnd}>
-          <Ionicons name="location" size={20} color={COLORS.error} />
+          <Ionicons name="location" size={18} color={COLORS.error} />
           <Text style={styles.routeText} numberOfLines={1}>
             {ride.destination}
           </Text>
@@ -311,179 +313,231 @@ const styles = StyleSheet.create({
   },
   routeInfo: {
     marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
   },
   routeStart: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    flex: 1,
+    maxWidth: '40%',
   },
   routeText: {
     ...TYPOGRAPHY.subtitle1,
     color: COLORS.text,
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.xs,
     flex: 1,
     fontWeight: '600',
+    fontSize: 13,
   },
   routeDash: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: SPACING.xs,
-    paddingLeft: 8,
+    justifyContent: 'center',
+    flex: 0.3,
   },
   dashLine: {
     flex: 1,
     height: 2,
     backgroundColor: COLORS.border,
-    marginHorizontal: SPACING.xs,
+    marginHorizontal: SPACING.sm,
   },
   routeEnd: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.sm,
+    flex: 1,
+    maxWidth: '40%',
   },
   timeAvailability: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     borderRadius: RADIUS.md,
     padding: SPACING.sm,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.background,
+    gap: SPACING.md,
+    flexWrap: 'nowrap',
   },
   timeBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    flex: 0,
   },
   timeText: {
     ...TYPOGRAPHY.subtitle2,
     color: COLORS.text,
     fontWeight: '700',
+    fontSize: 16,
   },
   minutesText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.success,
+    fontWeight: '600',
+    fontSize: 11,
   },
   availabilityBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    flex: 0,
   },
   seatsBox: {
     backgroundColor: COLORS.primary + '20',
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: RADIUS.sm,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   seatsCount: {
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.primary,
     fontWeight: '700',
   },
   seatsLabel: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.textSecondary,
+    fontSize: 10,
   },
   seatsText: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelMedium,
     color: COLORS.textSecondary,
+    fontWeight: '600',
+    fontSize: 12,
   },
   priceBlock: {
     alignItems: 'flex-end',
+    flex: 0,
   },
   priceLabel: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.textSecondary,
+    fontSize: 10,
   },
   priceValue: {
     ...TYPOGRAPHY.subtitle2,
     color: COLORS.primary,
     fontWeight: '700',
+    fontSize: 16,
   },
   driverInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.md,
-    paddingTop: SPACING.md,
+    marginBottom: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xs,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: SPACING.sm,
+    gap: SPACING.md,
+    justifyContent: 'space-between',
   },
   driverPhoto: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: COLORS.primary + '20',
   },
   driverPhotoPlaceholder: {
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   driverDetails: {
     flex: 1,
+    justifyContent: 'center',
+    marginRight: SPACING.sm,
   },
   driverName: {
     ...TYPOGRAPHY.subtitle2,
     color: COLORS.text,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
+    maxWidth: '80%',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
+    gap: 6,
+    marginTop: SPACING.xs,
   },
   ratingText: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.textSecondary,
+    fontSize: 12,
   },
   reserveButton: {
     borderRadius: RADIUS.md,
     overflow: 'hidden',
     backgroundColor: COLORS.primary,
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    flex: 0,
   },
   reserveGradient: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     alignItems: 'center',
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   reserveText: {
     ...TYPOGRAPHY.button,
     color: '#FFFFFF',
     fontWeight: '700',
+    fontSize: 14,
   },
   vehicleInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    justifyContent: 'flex-start',
   },
   vehicleTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: COLORS.secondary + '20',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
     borderRadius: RADIUS.sm,
   },
   vehicleType: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.secondary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 11,
+    textTransform: 'capitalize',
   },
   vehicleDetail: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'center',
   },
   vehiclePlate: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginLeft: 'auto',
+    ...TYPOGRAPHY.labelSmall,
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 12,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
   },
 })

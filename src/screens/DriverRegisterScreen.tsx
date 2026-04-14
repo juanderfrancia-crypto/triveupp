@@ -32,17 +32,28 @@ export default function DriverRegisterScreen() {
   const { user } = useAppStore()
   const { createRoute, loading: routeLoading, error: routeError } = useRoutes()
 
-  // Ruta campos
+  // Ruta campos - FECHA POR DEFECTO: MAÑANA
   const [origin, setOrigin] = useState('')
   const [originZone, setOriginZone] = useState('')
   const [destination, setDestination] = useState('')
   const [destinationZone, setDestinationZone] = useState('')
-  const [departureTime, setDepartureTime] = useState('')
-  const [arrivalTime, setArrivalTime] = useState('')
+  // Fecha y hora POR DEFECTO: AHORA (flujo informal de ride-sharing)
+  const [departureDate, setDepartureDate] = useState(new Date())
+  
+  // ⏰ TIEMPO DE SALIDA (departure delay): Cuántos minutos espera antes de salir
+  const [departureDelayMinutes, setDepartureDelayMinutes] = useState(0) // 0 = ahora
+  const [showDepartureDelayPicker, setShowDepartureDelayPicker] = useState(false)
+  const [customDepartureDelay, setCustomDepartureDelay] = useState('') // Para ingresar personalizado
+  
+  // ⏳ DURACIÓN DEL VIAJE: Cuántos minutos tarda de origen a destino
+  const [estimatedTravelMinutes, setEstimatedTravelMinutes] = useState('180') // 3 horas = 180 minutos
+  const [showTravelDurationPicker, setShowTravelDurationPicker] = useState(false)
+  const [customTravelDuration, setCustomTravelDuration] = useState('') // Para ingresar personalizado
   const [vehicleTypeId, setVehicleTypeId] = useState('')
   const [totalSeats, setTotalSeats] = useState('')
   const [pricePerSeat, setPricePerSeat] = useState('')
   const [showVehicleTypePicker, setShowVehicleTypePicker] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   // Vehículo datos
   const [vehicleData, setVehicleData] = useState<any>(null)
@@ -111,12 +122,8 @@ export default function DriverRegisterScreen() {
       Alert.alert('Error', 'Por favor ingresa la zona de llegada')
       return false
     }
-    if (!departureTime.trim()) {
-      Alert.alert('Error', 'Por favor ingresa la hora de salida (ej: 08:30)')
-      return false
-    }
-    if (!arrivalTime.trim()) {
-      Alert.alert('Error', 'Por favor ingresa la hora de llegada (ej: 10:30)')
+    if (!estimatedTravelMinutes.trim() || parseInt(estimatedTravelMinutes) < 5) {
+      Alert.alert('Error', 'La duración del viaje debe ser al menos 5 minutos')
       return false
     }
     if (!vehicleTypeId) {
@@ -135,6 +142,7 @@ export default function DriverRegisterScreen() {
       Alert.alert('Error', 'Por favor agrega información de tu vehículo primero en "Mi Vehículo"')
       return false
     }
+    
     return true
   }
 
@@ -149,14 +157,44 @@ export default function DriverRegisterScreen() {
     setSubmittingRoute(true)
     try {
       const now = new Date()
-      const dateStr = now.toISOString().split('T')[0]
+      
+      // Calcular hora de salida (ahora + minutos de espera)
+      const departureDateTime = new Date(now.getTime() + departureDelayMinutes * 60000)
+      const travelMinutes = parseInt(estimatedTravelMinutes, 10)
+      const arrivalDateTime = new Date(departureDateTime.getTime() + travelMinutes * 60000)
+
+      // Convertir a ISO strings CON timezone (UTC)
+      // Esto es crítico para que la BD y la VIEW puedan comparar correctamente con NOW()
+      const departure_time_str = departureDateTime.toISOString()
+      const arrival_time_str = arrivalDateTime.toISOString()
+
+      console.log('📅 TRANSACCIONES DE TIEMPO (MODELO INFORMAL):')
+      console.log(`  Ahora (local): ${toLocalISOString(now)}`)
+      console.log(`  Ahora (UTC): ${now.toISOString()}`)
+      console.log(`  Espera de: ${departureDelayMinutes} minutos`)
+      console.log(`  Salida (UTC): ${departure_time_str}`)
+      console.log(`  Duración viaje: ${travelMinutes} minutos`)
+      console.log(`  Llegada (UTC): ${arrival_time_str}`)
+
+      // ⚠️ Validación informal: permitir rutas desde hace 15 minutos
+      const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60000)
+      
+      if (departureDateTime < fifteenMinutesAgo) {
+        Alert.alert(
+          'Hora de salida no válida',
+          'La ruta debe comenzar en los próximos 15 minutos o ya.\n\n' +
+          'Ejemplo: "Ahora" o "En 20 minutos" ✅'
+        )
+        setSubmittingRoute(false)
+        return
+      }
 
       const routeData = {
         driver_id: user.id,
         origin: `${origin.trim()} - ${originZone.trim()}`,
         destination: `${destination.trim()} - ${destinationZone.trim()}`,
-        departure_time: `${dateStr}T${departureTime}:00`,
-        arrival_time: `${dateStr}T${arrivalTime}:00`,
+        departure_time: departure_time_str,
+        arrival_time: arrival_time_str,
         price_per_seat: parseFloat(pricePerSeat),
         total_seats: parseInt(totalSeats),
         available_seats: parseInt(totalSeats),
@@ -169,7 +207,13 @@ export default function DriverRegisterScreen() {
         status: 'scheduled',
       }
 
+      console.log('🚗 DATOS DE RUTA A CREAR:')
+      console.log(JSON.stringify(routeData, null, 2))
+
       const newRoute = await createRoute(routeData as any)
+
+      console.log('✅ RUTA CREADA EXITOSAMENTE:')
+      console.log(JSON.stringify(newRoute, null, 2))
 
       Alert.alert(
         'Éxito',
@@ -189,8 +233,11 @@ export default function DriverRegisterScreen() {
       setOriginZone('')
       setDestination('')
       setDestinationZone('')
-      setDepartureTime('')
-      setArrivalTime('')
+      setDepartureDate(new Date())
+      setDepartureDelayMinutes(0) // Resetear a "ahora"
+      setCustomDepartureDelay('') // Limpiar input personalizado
+      setEstimatedTravelMinutes('180') // Resetear a 3 horas
+      setCustomTravelDuration('') // Limpiar input personalizado
       setVehicleTypeId('')
       setTotalSeats('')
       setPricePerSeat('')
@@ -199,6 +246,38 @@ export default function DriverRegisterScreen() {
     } finally {
       setSubmittingRoute(false)
     }
+  }
+
+  // Formato amigable para mostrar el tiempo de salida
+  const getFormattedDepartureTime = () => {
+    if (departureDelayMinutes === 0) return 'Ahora'
+    if (departureDelayMinutes < 60) return `En ${departureDelayMinutes} min`
+    const hours = Math.floor(departureDelayMinutes / 60)
+    const mins = departureDelayMinutes % 60
+    if (mins === 0) return `En ${hours}h`
+    return `En ${hours}h ${mins}m`
+  }
+
+  // Formato amigable para duración del viaje
+  const getFormattedTravelDuration = () => {
+    const mins = parseInt(estimatedTravelMinutes, 10)
+    if (mins < 60) return `${mins} minutos`
+    const hours = Math.floor(mins / 60)
+    const remainingMins = mins % 60
+    if (remainingMins === 0) return `${hours} horas`
+    return `${hours}h ${remainingMins}m`
+  }
+
+  // Convertir fecha a ISO string SIN convertir timezone
+  // Esto es importante porque queremos guardar la hora LOCAL, no UTC
+  const toLocalISOString = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
   }
 
   return (
@@ -287,33 +366,216 @@ export default function DriverRegisterScreen() {
             />
           </View>
 
-          <View style={styles.rowContainer}>
-            <View style={[styles.inputContainer, { flex: 1 }]}>
-              <Ionicons name="time" size={20} color={COLORS.accent} />
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM"
-                placeholderTextColor={COLORS.textTertiary}
-                value={departureTime}
-                onChangeText={setDepartureTime}
-                maxLength={5}
-                editable={!routeLoading}
-              />
-            </View>
-
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: SPACING.md }]}>
-              <Ionicons name="time" size={20} color={COLORS.accent} />
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM"
-                placeholderTextColor={COLORS.textTertiary}
-                value={arrivalTime}
-                onChangeText={setArrivalTime}
-                maxLength={5}
-                editable={!routeLoading}
-              />
-            </View>
+          {/* FECHA DEL VIAJE */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="calendar" size={20} color={COLORS.primary} />
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker(!showDatePicker)}
+            >
+              <Text style={styles.datePickerText}>
+                {departureDate.toLocaleDateString('es-CO', {
+                  weekday: 'short',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Helper text: Flujo informal */}
+          <View style={styles.helperTextContainer}>
+            <Ionicons name="information-circle" size={16} color={COLORS.success} />
+            <Text style={[styles.helperText, { color: COLORS.success }]}>
+              ⚡ Publica tu ruta AHORA y comienza de inmediato
+            </Text>
+          </View>
+
+          {showDatePicker && (
+            <View style={styles.datePickerContainer}>
+              <View style={styles.datePickerControls}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newDate = new Date(departureDate)
+                    newDate.setDate(newDate.getDate() - 1)
+                    setDepartureDate(newDate)
+                  }}
+                  style={styles.dateButton}
+                >
+                  <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+
+                <Text style={styles.datePickerDisplayText}>
+                  {departureDate.toLocaleDateString('es-CO', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    const newDate = new Date(departureDate)
+                    newDate.setDate(newDate.getDate() + 1)
+                    setDepartureDate(newDate)
+                  }}
+                  style={styles.dateButton}
+                >
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.datePickerDone}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerDoneText}>Listo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* DEPARTURE TIME SELECTOR */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="play-circle" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>¿Cuándo sales?</Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowDepartureDelayPicker(!showDepartureDelayPicker)}
+              disabled={routeLoading}
+            >
+              <Text style={styles.datePickerText}>
+                {getFormattedDepartureTime()}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {showDepartureDelayPicker && (
+            <View style={styles.optionsPickerContainer}>
+              {[0, 5, 10, 15, 20].map((mins) => (
+                <TouchableOpacity
+                  key={mins}
+                  style={[
+                    styles.optionButton,
+                    departureDelayMinutes === mins && customDepartureDelay === '' && styles.optionButtonActive,
+                  ]}
+                  onPress={() => {
+                    setDepartureDelayMinutes(mins)
+                    setCustomDepartureDelay('')
+                    setShowDepartureDelayPicker(false)
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.optionButtonText,
+                      departureDelayMinutes === mins && customDepartureDelay === '' && styles.optionButtonTextActive,
+                    ]}
+                  >
+                    {mins === 0 ? '⏱️ Ahora' : `⏳ En ${mins}m`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              
+              {/* Input personalizado */}
+              <View style={styles.customInputContainer}>
+                <TextInput
+                  style={styles.customInput}
+                  placeholder="Ej: 18"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={customDepartureDelay}
+                  onChangeText={(text) => {
+                    setCustomDepartureDelay(text)
+                    if (text.trim()) {
+                      setDepartureDelayMinutes(parseInt(text, 10))
+                    }
+                  }}
+                  keyboardType="numeric"
+                  maxLength={2}
+                />
+                <Text style={styles.customInputLabel}>min</Text>
+              </View>
+            </View>
+          )}
+
+          {/* TRAVEL DURATION SELECTOR */}
+          <View style={[styles.sectionHeader, { marginTop: SPACING.lg }]}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="hourglass" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>Duración estimada del viaje</Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowTravelDurationPicker(!showTravelDurationPicker)}
+              disabled={routeLoading}
+            >
+              <Text style={styles.datePickerText}>
+                {getFormattedTravelDuration()}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {showTravelDurationPicker && (
+            <View style={styles.optionsPickerContainer}>
+              {[30, 45, 60, 90, 120, 150, 180, 240, 300].map((mins) => {
+                const formatted = mins < 60 
+                  ? `${mins}m` 
+                  : `${Math.floor(mins / 60)}h${mins % 60 > 0 ? ` ${mins % 60}m` : ''}`
+                return (
+                  <TouchableOpacity
+                    key={mins}
+                    style={[
+                      styles.optionButton,
+                      estimatedTravelMinutes === String(mins) && customTravelDuration === '' && styles.optionButtonActive,
+                    ]}
+                    onPress={() => {
+                      setEstimatedTravelMinutes(String(mins))
+                      setCustomTravelDuration('')
+                      setShowTravelDurationPicker(false)
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.optionButtonText,
+                        estimatedTravelMinutes === String(mins) && customTravelDuration === '' && styles.optionButtonTextActive,
+                      ]}
+                    >
+                      {formatted}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+
+              {/* Input personalizado */}
+              <View style={styles.customInputContainer}>
+                <TextInput
+                  style={styles.customInput}
+                  placeholder="Ej: 95"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={customTravelDuration}
+                  onChangeText={(text) => {
+                    setCustomTravelDuration(text)
+                    if (text.trim()) {
+                      setEstimatedTravelMinutes(text)
+                    }
+                  }}
+                  keyboardType="numeric"
+                  maxLength={3}
+                />
+                <Text style={styles.customInputLabel}>min</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* VEHICLE TYPE */}
@@ -359,7 +621,8 @@ export default function DriverRegisterScreen() {
               <Ionicons name="people" size={20} color={COLORS.accent} />
               <TextInput
                 style={styles.input}
-                placeholder={vehicleTypeId ? `Hasta ${maxSeats}` : 'Selecciona tipo'}
+                placeholder={vehicleTypeId ? `Ej: ${maxSeats}` : 'Selecciona vehículo'}
+                placeholderTextColor={COLORS.textTertiary}
                 placeholderTextColor={COLORS.textTertiary}
                 value={totalSeats}
                 onChangeText={handleTotalSeatsChange}
@@ -990,5 +1253,198 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.labelMedium,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
+  },
+
+  // Date Picker Styles
+  datePickerButton: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.surface + 'F8',
+    borderRadius: RADIUS.lg,
+    height: 52,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight + '99',
+    borderTopColor: COLORS.shadowWhiteLight,
+    borderTopWidth: 1.5,
+    borderLeftColor: COLORS.shadowWhiteDark,
+    borderLeftWidth: 1,
+  },
+  datePickerText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  datePickerContainer: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    marginHorizontal: 0,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOWS.sm,
+  },
+  datePickerControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  dateButton: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary + '10',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 48,
+    height: 48,
+  },
+  datePickerDisplayText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
+    marginHorizontal: SPACING.md,
+  },
+  datePickerDone: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
+  datePickerDoneText: {
+    color: COLORS.textInverse,
+    ...TYPOGRAPHY.bodyMedium,
+    fontWeight: '600',
+  },
+
+  // Period Toggle (AM/PM) Styles
+  periodToggleContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    flex: 1,
+    marginLeft: SPACING.xs,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface + 'F8',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight + '99',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  periodButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  periodText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  periodTextActive: {
+    color: COLORS.textInverse,
+    fontWeight: '700',
+  },
+
+  // Helper Text Styles
+  helperTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.primary + '10',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+  },
+  helperText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.primary,
+    fontWeight: '500',
+    flex: 1,
+  },
+
+  // Options Picker Styles (Departure Delay & Travel Duration)
+  optionsPickerContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    marginHorizontal: 0,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOWS.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.md,
+    justifyContent: 'center',
+  },
+  optionButton: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight + '99',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 90,
+  },
+  optionButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  optionButtonText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  optionButtonTextActive: {
+    color: COLORS.textInverse,
+    fontWeight: '700',
+  },
+
+  // Custom Input Styles (para personalizar tiempos)
+  customInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.md,
+  },
+  customInput: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    height: 44,
+  },
+  customInputLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    minWidth: 30,
   },
 })

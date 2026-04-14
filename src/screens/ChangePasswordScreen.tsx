@@ -16,11 +16,14 @@ import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../services/supabase'
 import { validatePassword } from '../utils/validations'
+import { logPasswordChange } from '../services/activityLogger'
+import { useAuth } from '../hooks/useAuth'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 
 export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets()
   const navigation = useNavigation()
+  const { user } = useAuth()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({})
@@ -45,6 +48,11 @@ export default function ChangePasswordScreen() {
       const { data, error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) {
         throw error
+      }
+
+      // Registrar cambio de contraseña
+      if (user?.id) {
+        await logPasswordChange(user.id)
       }
 
       Alert.alert('Contraseña actualizada', 'Tu contraseña se actualizó correctamente.')

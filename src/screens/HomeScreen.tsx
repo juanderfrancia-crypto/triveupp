@@ -51,6 +51,9 @@ export default function HomeScreen() {
   const carPositionAnim = useRef(new Animated.Value(0)).current
   const realTripProgressAnim = useRef(new Animated.Value(0)).current
   
+  // Animación de pulsación para botón "Viajes Ahora"
+  const shimmerAnim = useRef(new Animated.Value(0)).current
+  
   const balance = useAppStore((state) => state.balance)
   const user = useAppStore((state) => state.user)
   const selectedRoute = useAppStore((state) => state.selectedRoute)
@@ -79,6 +82,26 @@ export default function HomeScreen() {
       loadTopDrivers()
     }, [loadTopDrivers])
   )
+
+  // Animación de pulsación para botón "Viajes Ahora"
+  useEffect(() => {
+    const startPulse = () => {
+      Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        })
+      ).start()
+    }
+
+    startPulse()
+
+    return () => {
+      shimmerAnim.setValue(0)
+    }
+  }, [shimmerAnim])
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -404,23 +427,33 @@ export default function HomeScreen() {
           onPress={() => navigation.navigate('AvailableRides' as never)}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={['#10A37F', '#0E8B6E']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.availableRidesGradient}
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  scale: shimmerAnim.interpolate({
+                    inputRange: [0, 0.5, 1],
+                    outputRange: [1, 1.05, 1],
+                  }),
+                },
+              ],
+            }}
           >
-            <View style={styles.availableRidesContent}>
-              <View style={styles.availableRidesIcon}>
-                <Ionicons name="flash" size={20} color="#FFFFFF" />
+            <LinearGradient
+              colors={['#10A37F', '#0E8B6E']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.availableRidesGradient}
+            >
+              <View style={styles.availableRidesContent}>
+                <View style={styles.availableRidesText}>
+                  <Text style={styles.availableRidesLabel}>Viajes Ahora</Text>
+                  <Text style={styles.availableRidesSubtitle}>Ver disponibles en tiempo real</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
               </View>
-              <View style={styles.availableRidesText}>
-                <Text style={styles.availableRidesLabel}>Viajes Ahora</Text>
-                <Text style={styles.availableRidesSubtitle}>Ver disponibles en tiempo real</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-            </View>
-          </LinearGradient>
+            </LinearGradient>
+          </Animated.View>
         </TouchableOpacity>
 
         {/* Routes Section */}
@@ -1236,6 +1269,7 @@ const styles = StyleSheet.create({
   availableRidesGradient: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
   },
   availableRidesContent: {
     flexDirection: 'row',
@@ -1243,7 +1277,6 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   availableRidesIcon: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
     width: 40,
     height: 40,
     borderRadius: RADIUS.md,

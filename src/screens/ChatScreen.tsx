@@ -37,6 +37,7 @@ const ChatScreen = ({ navigation }: any) => {
   const { isRecording, startRecording, stopRecording, cancelRecording } = useAudioRecorder()
   const [inputText, setInputText] = useState('')
   const [isUploadingAudio, setIsUploadingAudio] = useState(false)
+  const [searchText, setSearchText] = useState('')
 
   useEffect(() => {
     const otherUserId = route.params?.otherUserId as string | undefined
@@ -112,7 +113,9 @@ const ChatScreen = ({ navigation }: any) => {
     },
     backButtonContainer: {
       padding: 8,
-      marginRight: 12,
+      marginLeft: 12,
+      borderRadius: 8,
+      backgroundColor: '#f0f0f0',
     },
     chatHeaderTitle: {
       fontSize: 18,
@@ -177,6 +180,16 @@ const ChatScreen = ({ navigation }: any) => {
       fontWeight: '700',
       marginBottom: 12,
       color: '#333',
+    },
+    searchInput: {
+      borderWidth: 1,
+      borderColor: '#ddd',
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      marginBottom: 12,
+      backgroundColor: '#f9f9f9',
+      fontSize: 14,
     },
     emptyStateContainer: {
       flex: 1,
@@ -253,19 +266,50 @@ const ChatScreen = ({ navigation }: any) => {
 
         {contacts.length > 0 && (
           <View style={styles.contactsSection}>
-            <Text style={styles.sectionTitle}>Iniciar nuevo chat</Text>
-            {contacts.map((contact) => (
-              <TouchableOpacity
-                key={contact.user_id}
-                style={styles.conversationItem}
-                onPress={() => loadConversation(contact.user_id)}
-              >
-                <Text style={styles.conversationName}>{contact.name}</Text>
-                <Text style={styles.conversationPreview} numberOfLines={1}>
-                  {contact.description}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <Text style={styles.sectionTitle}>📱 Iniciar nuevo chat</Text>
+            <Text style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
+              Contactos de viajes anteriores - puedes iniciar un nuevo chat aquí
+            </Text>
+            
+            {/* Barra de búsqueda */}
+            <TextInput
+              style={styles.searchInput}
+              placeholder="🔍 Buscar contacto..."
+              placeholderTextColor="#999"
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+
+            {/* Contactos filtrados */}
+            {contacts
+              .filter(contact => 
+                contact.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                contact.description.toLowerCase().includes(searchText.toLowerCase())
+              )
+              .map((contact) => (
+                <TouchableOpacity
+                  key={contact.user_id}
+                  style={styles.conversationItem}
+                  onPress={() => {
+                    loadConversation(contact.user_id)
+                    setSearchText('')
+                  }}
+                >
+                  <Text style={styles.conversationName}>{contact.name}</Text>
+                  <Text style={styles.conversationPreview} numberOfLines={1}>
+                    {contact.description}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            
+            {searchText && contacts.filter(c => 
+              c.name.toLowerCase().includes(searchText.toLowerCase()) ||
+              c.description.toLowerCase().includes(searchText.toLowerCase())
+            ).length === 0 && (
+              <Text style={{ fontSize: 13, color: '#999', textAlign: 'center', paddingVertical: 12 }}>
+                No se encontraron contactos
+              </Text>
+            )}
           </View>
         )}
 
@@ -288,9 +332,9 @@ const ChatScreen = ({ navigation }: any) => {
           ListEmptyComponent={
             <View style={styles.emptyStateContainer}>
               <Text style={styles.emptyStateIcon}>💬</Text>
-              <Text style={styles.emptyStateTitle}>No hay mensajes aún</Text>
+              <Text style={styles.emptyStateTitle}>¿Cómo funciona el chat?</Text>
               <Text style={styles.emptyStateDescription}>
-                Los chats aparecerán aquí después de que tengas viajes completados.{'\n\n'}Cuando viajes con otros usuarios, podrás enviarles mensajes y notas de voz.
+                {'🚗 Cuando completes un viaje con otro usuario{`\n`}(como pasajero o conductor){`\n\n`}📱 Podrás enviarle mensajes{`\n`}de texto y notas de voz{`\n\n`}👥 Todos tus contactos{`\n`}de viajes aparecerán aquí'}
               </Text>
               
               {/* CTA Buttons */}
@@ -298,15 +342,14 @@ const ChatScreen = ({ navigation }: any) => {
                 style={styles.ctaButton}
                 onPress={() => navigation.navigate('Search')}
               >
-                <Text style={styles.ctaButtonText}>🔍 Buscar un viaje</Text>
+                <Text style={styles.ctaButtonText}>🔍 Buscar tu primer viaje</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
                 style={styles.refreshButton}
                 onPress={async () => {
-                  // Recargar recargando la pantalla completa
+                  // Reset
                   setCurrentOtherUserId(null)
-                  // Forzar re-render
                   setInputText('')
                 }}
               >
@@ -328,14 +371,13 @@ const ChatScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.chatHeader}>
+        <Text style={styles.chatHeaderTitle}>{otherUserName}</Text>
         <TouchableOpacity 
           onPress={() => setCurrentOtherUserId(null)}
           style={styles.backButtonContainer}
         >
-          <Ionicons name="chevron-back" size={28} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.chatHeaderTitle}>{otherUserName}</Text>
-        <View style={{ width: 40 }} />
       </View>
 
       {/* Mensajes */}

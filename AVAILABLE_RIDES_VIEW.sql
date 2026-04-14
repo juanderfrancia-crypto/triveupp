@@ -45,8 +45,11 @@ SELECT
 FROM routes r
 LEFT JOIN profiles p ON r.driver_id = p.id
 WHERE 
-  -- Solo rutas futuras
-  r.departure_time > NOW()
+  -- 🚀 MODELO INFORMAL: Mostrar rutas que salieron AHORA o próximas
+  -- Permite conductores que publican su ruta hace poco (hasta 15 min atrás)
+  -- e incluye viajes que salen en los próximos 24 horas
+  r.departure_time > NOW() - INTERVAL '15 minutes'
+  AND r.departure_time <= NOW() + INTERVAL '24 hours'
   -- Solo rutas PROGRAMADAS (no en progreso ni completadas)
   AND r.status = 'scheduled'
   -- Solo si hay asientos disponibles

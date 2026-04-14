@@ -1,63 +1,87 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
+import { useEffect, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { supabase } from '../services/supabase'
+import { useAuth } from '../hooks/useAuth'
+
+interface Activity {
+  id: string
+  action: string
+  device: string
+  location: string
+  status: 'exitoso' | 'fallido'
+  created_at: string
+}
 
 export default function RecentActivityScreen() {
   const insets = useSafeAreaInsets()
   const navigation = useNavigation()
+  const { user } = useAuth()
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const activities = [
-    {
-      id: 1,
-      action: 'Inicio de sesión',
-      device: 'Android - Samsung Galaxy',
-      location: 'Bogotá, Colombia',
-      time: 'Hace 2 minutos',
-      icon: 'log-in-outline',
-      status: 'exitoso',
-    },
-    {
-      id: 2,
-      action: 'Cambio de contraseña',
-      device: 'Chrome - Escritorio',
-      location: 'Bogotá, Colombia',
-      time: 'Ayer a las 3:45 PM',
-      icon: 'lock-closed-outline',
-      status: 'exitoso',
-    },
-    {
-      id: 3,
-      action: 'Intento de inicio fallido',
-      device: 'Dirección IP desconocida',
-      location: 'Medellín, Colombia',
-      time: 'Hace 5 días',
-      icon: 'alert-outline',
-      status: 'fallido',
-    },
-    {
-      id: 4,
-      action: 'Cambio de correo',
-      device: 'iPhone 13 - iOS',
-      location: 'Bogotá, Colombia',
-      time: 'Hace 1 semana',
-      icon: 'mail-outline',
-      status: 'exitoso',
-    },
-    {
-      id: 5,
-      action: 'Inicio de sesión',
-      device: 'Android - Samsung Galaxy',
-      location: 'Cali, Colombia',
-      time: 'Hace 2 semanas',
-      icon: 'log-in-outline',
-      status: 'exitoso',
-    },
-  ]
+  useEffect(() => {
+    loadActivities()
+  }, [])
 
-  const getActivityColor = (status: string) => {
-    return status === 'exitoso' ? COLORS.primary : COLORS.error
+  const loadActivities = async () => {
+    if (!user?.id) return
+
+    try {
+      const { data, error } = await supabase
+        .from('user_activity')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      
+      setActivities(
+        data?.map((item: any) => ({
+          id: item.id,
+          action: item.action,
+          device: item.device || 'Dispositivo desconocido',
+          location: item.location || 'Ubicación desconocida',
+          status: item.status,
+          created_at: item.created_at,
+        })) || []
+      )
+    } catch (err) {
+      console.error('Error loading activities:', err)
+      Alert.alert('Error', 'No se pueden cargar las actividades')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Hace unos segundos'
+    if (diffMins < 60) return `Hace ${diffMins} minuto${diffMins > 1 ? 's' : ''}`
+    if (diffHours < 24) return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
+    if (diffDays < 7) return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
+    
+    return date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })
+  }
+
+  const getActivityIcon = (action: string) => {
+    if (action.includes('Inicio de sesión')) return 'log-in-outline'
+    if (action.includes('Contraseña')) return 'lock-closed-outline'
+    if (action.includes('fallido')) return 'alert-outline'
+    if (action.includes('Correo')) return 'mail-outline'
+    if (action.includes('Perfil')) return 'person-outline'
+    if (action.includes('Documentos')) return 'document-outline'
+    return 'notifications-outline'
   }
 
   return (
@@ -71,67 +95,80 @@ export default function RecentActivityScreen() {
           <View style={{ width: 28 }} />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionSubtitle}>
-            {activities.length} actividad{activities.length > 1 ? 'es' : ''} registrada{activities.length > 1 ? 's' : ''}
-          </Text>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: SPACING.xxxl }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : activities.length > 0 ? (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionSubtitle}>
+                {activities.length} actividad{activities.length > 1 ? 'es' : ''} registrada{activities.length > 1 ? 's' : ''}
+              </Text>
 
-          {activities.map((activity, index) => (
-            <View key={activity.id} style={styles.activityCard}>
-              <View style={styles.cardContent}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: getActivityColor(activity.status) + '15' },
-                  ]}
-                >
-                  <Ionicons
-                    name={activity.icon as any}
-                    size={20}
-                    color={getActivityColor(activity.status)}
-                  />
-                </View>
-
-                <View style={styles.activityInfo}>
-                  <Text style={styles.actionText}>{activity.action}</Text>
-                  <Text style={styles.deviceText}>{activity.device}</Text>
-                  <View style={styles.locationRow}>
-                    <Ionicons name="location-outline" size={14} color={COLORS.textTertiary} />
-                    <Text style={styles.locationText}>{activity.location}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.rightContent}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getActivityColor(activity.status) + '20' },
-                    ]}
-                  >
-                    <Text
+              {activities.map((activity, index) => (
+                <View key={activity.id} style={styles.activityCard}>
+                  <View style={styles.cardContent}>
+                    <View
                       style={[
-                        styles.statusText,
-                        { color: getActivityColor(activity.status) },
+                        styles.iconContainer,
+                        { backgroundColor: getActivityColor(activity.status) + '15' },
                       ]}
                     >
-                      {activity.status === 'exitoso' ? '✓' : '!'}
-                    </Text>
+                      <Ionicons
+                        name={getActivityIcon(activity.action) as any}
+                        size={20}
+                        color={getActivityColor(activity.status)}
+                      />
+                    </View>
+
+                    <View style={styles.activityInfo}>
+                      <Text style={styles.actionText}>{activity.action}</Text>
+                      <Text style={styles.deviceText}>{activity.device}</Text>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location-outline" size={14} color={COLORS.textTertiary} />
+                        <Text style={styles.locationText}>{activity.location}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.rightContent}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: getActivityColor(activity.status) + '20' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: getActivityColor(activity.status) },
+                          ]}
+                        >
+                          {activity.status === 'exitoso' ? '✓' : '!'}
+                        </Text>
+                      </View>
+                      <Text style={styles.timeText}>{formatTime(activity.created_at)}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.timeText}>{activity.time}</Text>
+
+                  {index !== activities.length - 1 && <View style={styles.divider} />}
                 </View>
-              </View>
-
-              {index !== activities.length - 1 && <View style={styles.divider} />}
+              ))}
             </View>
-          ))}
-        </View>
 
-        <View style={styles.securityNote}>
-          <Ionicons name="information-circle-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.noteText}>
-            Si ve actividad inusual, cambie su contraseña inmediatamente y revise sus dispositivos conectados
-          </Text>
-        </View>
+            <View style={styles.securityNote}>
+              <Ionicons name="information-circle-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.noteText}>
+                Si ve actividad inusual, cambie su contraseña inmediatamente
+              </Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="checkmark-circle-outline" size={64} color={COLORS.primary} style={{ marginBottom: SPACING.md }} />
+            <Text style={styles.emptyText}>No hay actividad registrada</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   )
@@ -247,6 +284,16 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxxl,
+  },
+  emptyText: {
+    ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textSecondary,
   },
 })

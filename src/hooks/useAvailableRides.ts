@@ -40,23 +40,39 @@ export const useAvailableRides = () => {
       setLoading(true)
       setError(null)
 
-      const now = new Date().toISOString()
+      console.log('🔍 BUSCANDO RUTAS DISPONIBLES (MODELO INFORMAL):')
+      console.log('  Mostrando rutas que salen AHORA o próximas 24 horas')
+      console.log('  Permite conductores informales que publican su ruta al instante')
+      
       const { data, error: fetchError } = await supabase
         .from('available_rides')
         .select('*')
-        .gt('departure_time', now)
+        // La VIEW already filtra por: departure_time > NOW() - 15 min AND < NOW() + 24 horas
         .order('departure_time', { ascending: true })
 
       if (fetchError) {
-        console.error('Error fetching available rides:', fetchError)
+        console.error('❌ Error fetching available rides:', fetchError)
         setError(fetchError.message)
         return
+      }
+
+      console.log(`✅ Se encontraron ${(data || []).length} rutas disponibles:`)
+      if (data && data.length > 0) {
+        data.forEach((ride: any) => {
+          const departureTime = new Date(ride.departure_time)
+          const now = new Date()
+          const minutosHasta = Math.round((departureTime.getTime() - now.getTime()) / 60000)
+          const tiempoTexto = minutosHasta < 0 
+            ? `hace ${Math.abs(minutosHasta)} min`
+            : `en ${minutosHasta} min`
+          console.log(`  - ${ride.origin} → ${ride.destination} (${tiempoTexto})`)
+        })
       }
 
       setRides((data as AvailableRide[]) || [])
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      console.error('Exception fetching rides:', err)
+      console.error('❌ Exception fetching rides:', err)
       setError(message)
     } finally {
       setLoading(false)

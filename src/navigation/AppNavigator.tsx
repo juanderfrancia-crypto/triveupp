@@ -43,6 +43,9 @@ import LanguageScreen from '../screens/LanguageScreen'
 import LearningCenterScreen from '../screens/LearningCenterScreen'
 import BugReportScreen from '../screens/BugReportScreen'
 import AvailableRidesScreen from '../screens/AvailableRidesScreen'
+import SavedAddressesScreen from '../screens/SavedAddressesScreen'
+import PaymentMethodsScreen from '../screens/PaymentMethodsScreen'
+import TripPreferencesScreen from '../screens/TripPreferencesScreen'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 
@@ -152,6 +155,9 @@ export default function AppNavigator() {
             <Stack.Screen name="ScheduledTrips" component={ScheduledTripsScreen} />
             <Stack.Screen name="GroupTrips" component={GroupTripsScreen} />
             <Stack.Screen name="FavoriteRoutes" component={FavoriteRoutesScreen} />
+            <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
+            <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+            <Stack.Screen name="TripPreferences" component={TripPreferencesScreen} />
             <Stack.Screen name="TripHistory" component={TripHistoryScreen} />
             <Stack.Screen name="VehicleInfo" component={VehicleInfoScreen} />
             <Stack.Screen name="EditVehicle" component={EditVehicleScreen} />

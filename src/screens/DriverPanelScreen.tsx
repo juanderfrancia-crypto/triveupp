@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
@@ -54,6 +55,7 @@ export default function DriverPanelScreen() {
   const [updatingRouteId, setUpdatingRouteId] = useState<string | null>(null)
   const [approvalStatus, setApprovalStatus] = useState<DriverApprovalStatus | null>(null)
   const [checkingApproval, setCheckingApproval] = useState(true)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchDriverRoutes = useCallback(async () => {
     if (!user?.id) return
@@ -101,6 +103,25 @@ export default function DriverPanelScreen() {
   useEffect(() => {
     fetchDriverRoutes()
   }, [fetchDriverRoutes])
+
+  // Polling para actualizar rutas cuando está enfocada
+  useFocusEffect(
+    useCallback(() => {
+      fetchDriverRoutes()
+      
+      // Configurar polling cada 3 segundos
+      pollingIntervalRef.current = setInterval(() => {
+        fetchDriverRoutes()
+      }, 3000)
+
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    }, [fetchDriverRoutes])
+  )
 
   useEffect(() => {
     const checkApprovalStatus = async () => {
@@ -181,7 +202,8 @@ export default function DriverPanelScreen() {
   }
 
   const getSeatsFilled = (route: DriverRoute) => {
-    return route.total_seats - route.available_seats
+    // Contar directamente los pasajeros confirmados en lugar de confiar en available_seats
+    return route.passengers ? route.passengers.length : 0
   }
 
   const getStatusInfo = (status: string) => {

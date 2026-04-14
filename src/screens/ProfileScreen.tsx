@@ -344,7 +344,10 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Pasajero</Text>
 
           <View style={styles.menuCard}>
-            <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]}>
+            <TouchableOpacity 
+              style={[styles.menuItem, styles.menuItemLast]}
+              onPress={() => navigation.navigate('SavedAddresses')}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="location-outline" size={20} color={COLORS.primary} />
               </View>
@@ -354,7 +357,10 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.menuCard}>
-            <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]}>
+            <TouchableOpacity 
+              style={[styles.menuItem, styles.menuItemLast]}
+              onPress={() => navigation.navigate('PaymentMethods' as never)}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="card-outline" size={20} color={COLORS.primary} />
               </View>
