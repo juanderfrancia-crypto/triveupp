@@ -1,8 +1,8 @@
 import { Audio } from 'expo-av'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 export const useAudioRecorder = () => {
-  const [recording, setRecording] = useState<Audio.Recording | null>(null)
+  const recordingRef = useRef<Audio.Recording | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [duration, setDuration] = useState(0)
 
@@ -30,7 +30,7 @@ export const useAudioRecorder = () => {
       )
       await rec.startAsync()
       
-      setRecording(rec)
+      recordingRef.current = rec
       setIsRecording(true)
       setDuration(0)
       
@@ -42,10 +42,18 @@ export const useAudioRecorder = () => {
   }, [])
 
   const stopRecording = useCallback(async () => {
-    if (!recording) return null
+    if (!recordingRef.current) return null
 
     try {
-      await recording.stopAsync()
+      const recording = recordingRef.current
+      if (typeof recording.stopAsync === 'function') {
+        await recording.stopAsync()
+      } else if (typeof recording.stopAndUnloadAsync === 'function') {
+        await recording.stopAndUnloadAsync()
+      } else {
+        throw new Error('El objeto de grabación no soporta stopAsync ni stopAndUnloadAsync')
+      }
+
       const uri = recording.getURI()
       
       // Obtener duración
@@ -53,28 +61,36 @@ export const useAudioRecorder = () => {
       const durationMs = status.durationMillis || 0
       
       setIsRecording(false)
-      setRecording(null)
       setDuration(0)
+      recordingRef.current = null
 
       return { uri, durationMs }
     } catch (err) {
       console.error('Error stopping recording:', err)
+      recordingRef.current = null
       return null
     }
-  }, [recording])
+  }, [])
 
   const cancelRecording = useCallback(async () => {
-    if (recording) {
+    if (recordingRef.current) {
       try {
-        await recording.stopAsync()
+        const recording = recordingRef.current
+        if (typeof recording.stopAsync === 'function') {
+          await recording.stopAsync()
+        } else if (typeof recording.stopAndUnloadAsync === 'function') {
+          await recording.stopAndUnloadAsync()
+        } else {
+          console.warn('El objeto de grabación no soporta stopAsync ni stopAndUnloadAsync')
+        }
       } catch (err) {
         console.error('Error cancelling recording:', err)
       }
     }
     setIsRecording(false)
-    setRecording(null)
     setDuration(0)
-  }, [recording])
+    recordingRef.current = null
+  }, [])
 
   return {
     isRecording,

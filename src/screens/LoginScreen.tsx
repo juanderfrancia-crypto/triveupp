@@ -27,13 +27,12 @@ import OfflineBanner from '../components/OfflineBanner'
 export default function LoginScreen() {
   const navigation = useNavigation()
   const { setUser, setAuthUser } = useAppStore()
-  const { login, loading: authLoading, error: authError, signInWithApple, handleGoogleLogin } = useAuth()
+  const { login, loading: authLoading, error: authError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [socialLoading, setSocialLoading] = useState(false)
 
   const validate = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -117,128 +116,6 @@ export default function LoginScreen() {
       }
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  const handleGoogleLoginPress = async () => {
-    try {
-      setSocialLoading(true)
-      await handleGoogleLogin()
-    } catch (err: any) {
-      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
-        errorHandler.handle(
-          'Sin conexión a internet',
-          ErrorType.NETWORK,
-          ErrorSeverity.HIGH,
-          true,
-          { provider: 'google' }
-        )
-      } else if (err.code === 'ERR_GOOGLE_SIGN_IN_CANCELLED') {
-        // Usuario canceló, no mostrar error
-        return
-      } else {
-        errorHandler.handle(
-          'No se pudo iniciar sesión con Google',
-          ErrorType.AUTH,
-          ErrorSeverity.MEDIUM,
-          true,
-          { provider: 'google', error: err.message }
-        )
-      }
-    } finally {
-      setSocialLoading(false)
-    }
-  }
-
-  const handleAppleLoginPress = async () => {
-    try {
-      setSocialLoading(true)
-      const data = (await signInWithApple()) as any
-      if (data?.user) {
-        const { data: profile, error: profileError } = await (await import('../services/supabase')).supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single()
-
-        if (profileError && profileError.code !== 'PGRST116') {
-          errorHandler.handleSupabaseError(profileError, 'fetch_profile_apple', { userId: data.user.id })
-          return
-        }
-
-        if (profile) {
-          setUser({
-            id: profile.id,
-            name: profile.name,
-            email: profile.email,
-            phone: profile.phone,
-            role: profile.role,
-            rating: profile.rating,
-            balance: profile.balance || 0,
-            membership_type: profile.membership_type || 'free',
-            membership_expiry: profile.membership_expiry,
-          })
-        } else {
-          // Crear perfil si no existe
-          const appleEmail = data.user.email || `user_${data.user.id}@apple.local`
-          const appleName = data.user.user_metadata?.full_name || 'Usuario Apple'
-          
-          const { data: newProfile, error: insertError } = await (await import('../services/supabase')).supabase
-            .from('profiles')
-            .insert([{
-              id: data.user.id,
-              name: appleName,
-              email: appleEmail,
-              phone: '',
-              role: 'passenger',
-            }])
-            .select()
-            .single()
-
-          if (insertError) {
-            errorHandler.handleSupabaseError(insertError, 'create_profile_apple', { email: appleEmail })
-            return
-          }
-
-          setUser({
-            id: data.user.id,
-            name: appleName,
-            email: appleEmail,
-            phone: '',
-            role: 'passenger',
-            rating: 0,
-            balance: 0,
-            membership_type: 'free',
-            membership_expiry: null,
-          })
-        }
-        setAuthUser(data.user)
-      }
-    } catch (err: any) {
-      if (err.code === 'ERR_APPLE_SIGN_IN_CANCELLED') {
-        // Usuario canceló, no mostrar error
-        return
-      }
-      
-      if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
-        errorHandler.handle(
-          'Sin conexión a internet',
-          ErrorType.NETWORK,
-          ErrorSeverity.HIGH,
-          true,
-          { provider: 'apple' }
-        )
-      } else {
-        errorHandler.handle(
-          'No se pudo iniciar sesión con Apple',
-          ErrorType.AUTH,
-          ErrorSeverity.MEDIUM,
-          true,
-          { provider: 'apple', error: err.message }
-        )
-      }
-    } finally {
-      setSocialLoading(false)
     }
   }
 
@@ -348,46 +225,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             {authError && <Text style={styles.errorText}>{authError}</Text>}
-
-            {/* Divisor */}
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.orText}>o continúa con</Text>
-              <View style={styles.divider} />
-            </View>
-
-            {/* Botones sociales */}
-            <View style={styles.socialBtns}>
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={handleGoogleLoginPress}
-                disabled={isSubmitting || socialLoading}
-              >
-                {socialLoading ? (
-                  <ActivityIndicator color={COLORS.textPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={20} color={COLORS.textPrimary} />
-                    <Text style={styles.socialBtnText}>Google</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={handleAppleLoginPress}
-                disabled={isSubmitting || socialLoading}
-              >
-                {socialLoading ? (
-                  <ActivityIndicator color={COLORS.textPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-apple" size={20} color={COLORS.textPrimary} />
-                    <Text style={styles.socialBtnText}>Apple</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
           </View>
 
           {/* Footer */}
@@ -530,46 +367,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: SPACING.lg,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-  },
-  orText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textTertiary,
-    marginHorizontal: SPACING.md,
-  },
-  socialBtns: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  socialBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    height: 48,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  socialBtnText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
   },
   footer: {
     flexDirection: 'row',

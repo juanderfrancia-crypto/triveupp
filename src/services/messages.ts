@@ -7,13 +7,18 @@ export interface Message {
   to_user_id: string
   booking_id?: string
   message: string
-  message_type?: 'text' | 'audio' // NUEVO: tipo de mensaje
-  audio_url?: string // NUEVO: URL del audio en Storage
-  audio_duration?: number // NUEVO: duración en ms
-  is_audio_listened?: boolean // NUEVO: si ya se escuchó
+  message_type?: 'text' | 'audio'
+  audio_url?: string
+  audio_duration?: number
+  is_audio_listened?: boolean
   is_read: boolean
   read_at?: string
   created_at: string
+  // FASE 2 - Advanced features
+  reply_to_id?: string
+  is_pinned?: boolean
+  edited_at?: string
+  edited_by?: string
 }
 
 export interface Conversation {
@@ -362,6 +367,28 @@ export const deleteConversation = async (userId: string, otherUserId: string): P
 }
 
 // ============================================
+// UTILIDADES DE AUDIO
+// ============================================
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64
+  const decoder = typeof atob === 'function' ? atob : globalThis.atob
+
+  if (typeof decoder !== 'function') {
+    throw new Error('El entorno no soporta atob para decodificar Base64')
+  }
+
+  const binaryString = decoder(cleanBase64)
+  const bytes = new Uint8Array(binaryString.length)
+
+  for (let i = 0; i < binaryString.length; i += 1) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+
+  return bytes
+}
+
+// ============================================
 // ENVIAR MENSAJE DE AUDIO
 // ============================================
 
@@ -384,23 +411,45 @@ export const sendAudioMessage = async (
     }
 
     // 1. Subir archivo de audio a Storage
-    const filename = `${fromUserId}_${Date.now()}.m4a`
-    const { error: uploadError } = await supabase.storage
-      .from('audio-messages')
-      .upload(filename, Buffer.from(audioBase64, 'base64'), {
-        contentType: 'audio/m4a',
-        upsert: false,
-      })
+    const filename = `${Date.now()}.m4a`
+    const candidatePaths = [
+      `${fromUserId}/${filename}`,
+      `audio/${fromUserId}/${filename}`,
+      `audios/${fromUserId}/${filename}`,
+      `messages/${fromUserId}/${filename}`,
+    ]
+    const audioBytes = base64ToUint8Array(audioBase64)
 
-    if (uploadError) {
+    let uploadedFilePath: string | null = null
+    let uploadError: any = null
+
+    for (const candidatePath of candidatePaths) {
+      const { error } = await supabase.storage
+        .from('audio-messages')
+        .upload(candidatePath, audioBytes, {
+          contentType: 'audio/m4a',
+          upsert: false,
+        })
+
+      if (!error) {
+        uploadedFilePath = candidatePath
+        uploadError = null
+        break
+      }
+
+      console.warn(`Audio upload failed for path ${candidatePath}:`, error)
+      uploadError = error
+    }
+
+    if (!uploadedFilePath) {
       console.error('Storage upload error:', uploadError)
-      throw new Error(`Error al subir audio: ${uploadError.message}`)
+      throw new Error(`Error al subir audio: ${uploadError?.message || uploadError}`)
     }
 
     // 2. Obtener URL pública
     const { data: publicUrl } = supabase.storage
       .from('audio-messages')
-      .getPublicUrl(filename)
+      .getPublicUrl(uploadedFilePath)
 
     if (!publicUrl) {
       throw new Error('No se pudo obtener URL del audio')
@@ -475,3 +524,362 @@ export const markAudioAsListened = async (messageId: string): Promise<void> => {
     throw err
   }
 }
+
+// ============================================
+// ELIMINAR UN MENSAJE (Soft delete)
+// ============================================
+
+export const deleteMessage = async (messageId: string): Promise<void> => {
+  try {
+    console.log('🗑️ [deleteMessage] Iniciando eliminación del mensaje:', messageId)
+    
+    // Primero verificar que el mensaje existe
+    const { data: existingMsg, error: fetchError } = await supabase
+      .from('messages')
+      .select('id, message, from_user_id')
+      .eq('id', messageId)
+      .single()
+
+    console.log('🗑️ [deleteMessage] Mensaje encontrado:', existingMsg)
+    if (fetchError) {
+      console.error('🗑️ [deleteMessage] Error al buscar mensaje:', fetchError)
+      throw fetchError
+    }
+
+    if (!existingMsg) {
+      throw new Error('Mensaje no encontrado')
+    }
+
+    // Ahora marcar como eliminado
+    const { data, error } = await supabase
+      .from('messages')
+      .update({ 
+        message: '[Mensaje eliminado]',
+        message_type: 'text'
+      })
+      .eq('id', messageId)
+      .select()
+
+    console.log('🗑️ [deleteMessage] Response data:', data)
+    console.log('🗑️ [deleteMessage] Response error:', error)
+    console.log('🗑️ [deleteMessage] Filas actualizadas:', data?.length || 0)
+
+    if (error) {
+      console.error('🗑️ [deleteMessage] Error from Supabase:', error)
+      throw error
+    }
+
+    if (!data || data.length === 0) {
+      console.error('🗑️ [deleteMessage] ⚠️ No se actualizó ninguna fila. Verifica permisos RLS')
+      throw new Error('No se pudo actualizar el mensaje - verifica permisos')
+    }
+    
+    console.log('✓ [deleteMessage] Mensaje marcado como eliminado:', messageId)
+  } catch (err: any) {
+    console.error('❌ [deleteMessage] Error:', err.message || err)
+    throw err
+  }
+}
+
+// ============================================
+// ARCHIVAR/ELIMINAR CONVERSACIÓN COMPLETA
+// ============================================
+
+export const archiveConversation = async (userId: string, otherUserId: string): Promise<void> => {
+  try {
+    console.log('📁 [archiveConversation] Archivando conversación con:', otherUserId)
+    
+    const { error } = await supabase
+      .from('archived_conversations')
+      .insert({
+        user_id: userId,
+        other_user_id: otherUserId,
+      })
+
+    if (error) {
+      console.error('Error archivando conversación:', error)
+      throw error
+    }
+
+    console.log('✓ [archiveConversation] Conversación archivada:', otherUserId)
+  } catch (err: any) {
+    console.error('❌ [archiveConversation] Error:', err.message || err)
+    throw err
+  }
+}
+
+// Desarchivar conversación
+export const unarchiveConversation = async (userId: string, otherUserId: string): Promise<void> => {
+  try {
+    console.log('📁 [unarchiveConversation] Desarchivando conversación con:', otherUserId)
+    
+    const { error } = await supabase
+      .from('archived_conversations')
+      .delete()
+      .eq('user_id', userId)
+      .eq('other_user_id', otherUserId)
+
+    if (error) {
+      console.error('Error desarchivando conversación:', error)
+      throw error
+    }
+
+    console.log('✓ [unarchiveConversation] Conversación desarchivada:', otherUserId)
+  } catch (err: any) {
+    console.error('❌ [unarchiveConversation] Error:', err.message || err)
+    throw err
+  }
+}
+
+// Obtener lista de conversaciones archivadas
+export const getArchivedConversations = async (userId: string): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('archived_conversations')
+      .select('other_user_id')
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    return (data || []).map(row => row.other_user_id)
+  } catch (err: any) {
+    console.error('Error fetching archived conversations:', err)
+    throw err
+  }
+}
+
+// Obtener conversaciones archivadas CON detalles
+export const getArchivedConversationsDetailed = async (userId: string): Promise<Conversation[]> => {
+  try {
+    // Obtener IDs de archivadas
+    const { data: archived, error: archivedError } = await supabase
+      .from('archived_conversations')
+      .select('other_user_id')
+      .eq('user_id', userId)
+
+    if (archivedError) throw archivedError
+
+    const archivedIds = (archived || []).map(row => row.other_user_id)
+    if (archivedIds.length === 0) return []
+
+    // Obtener detalles de esos usuarios en tabla conversaciones
+    const { data: conversations, error: convError } = await supabase
+      .from('messages')
+      .select('from_user_id, to_user_id')
+      .or(`and(from_user_id.eq.${userId},to_user_id.in.(${archivedIds.join(',')})),and(from_user_id.in.(${archivedIds.join(',')}),to_user_id.eq.${userId})`)
+      .order('created_at', { ascending: false })
+
+    if (convError) throw convError
+
+    // Construir lista de conversaciones archivadas
+    const archConvMap = new Map<string, Conversation>()
+    
+    for (const archivedId of archivedIds) {
+      // Obtener perfil del otro usuario
+      const { data: otherProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('name, avatar_url')
+        .eq('id', archivedId)
+        .single()
+
+      if (profileError) continue
+
+      // Obtener último mensaje con ese usuario
+      const { data: lastMsg, error: msgError } = await supabase
+        .from('messages')
+        .select('message, created_at, from_user_id, to_user_id, is_read')
+        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${archivedId}),and(from_user_id.eq.${archivedId},to_user_id.eq.${userId})`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      archConvMap.set(archivedId, {
+        other_user_id: archivedId,
+        other_user_name: otherProfile.name || 'Usuario',
+        other_user_avatar: otherProfile.avatar_url,
+        last_message: lastMsg?.message || '[Sin mensajes]',
+        last_message_time: lastMsg?.created_at || new Date().toISOString(),
+        unread_count: 0, // Las archivadas no tienen count de no leídos
+      })
+    }
+
+    return Array.from(archConvMap.values())
+  } catch (err: any) {
+    console.error('Error fetching archived conversations detailed:', err)
+    throw err
+  }
+}
+
+// Eliminar PERMANENTEMENTE una conversación archivada (también elimina mensajes)
+export const deleteArchivedConversationPermanently = async (userId: string, otherUserId: string): Promise<void> => {
+  try {
+    console.log('🗑️ [deleteArchivedConversationPermanently] Eliminando para siempre:', otherUserId)
+    
+    // 1. Eliminar mensajes donde yo soy el remitente Y el otro es receptor
+    const { error: error1 } = await supabase
+      .from('messages')
+      .delete()
+      .eq('from_user_id', userId)
+      .eq('to_user_id', otherUserId)
+
+    if (error1) {
+      console.warn('⚠️ [deleteArchivedConversationPermanently] Warning (msg 1):', error1)
+    }
+
+    // 2. Eliminar mensajes donde el otro es remitente Y yo soy receptor
+    const { error: error2 } = await supabase
+      .from('messages')
+      .delete()
+      .eq('from_user_id', otherUserId)
+      .eq('to_user_id', userId)
+
+    if (error2) {
+      console.warn('⚠️ [deleteArchivedConversationPermanently] Warning (msg 2):', error2)
+    }
+
+    // 3. Eliminar del archivo
+    const { error: archiveError } = await supabase
+      .from('archived_conversations')
+      .delete()
+      .eq('user_id', userId)
+      .eq('other_user_id', otherUserId)
+
+    if (archiveError) {
+      console.error('Error eliminando permanentemente:', archiveError)
+      throw archiveError
+    }
+
+    console.log('✓ [deleteArchivedConversationPermanently] Eliminado permanentemente:', otherUserId)
+  } catch (err: any) {
+    console.error('❌ [deleteArchivedConversationPermanently] Error:', err.message || err)
+    throw err
+  }
+}
+
+// ============================================
+// FASE 2: REPLY/QUOTE, PIN, EDIT
+// ============================================
+
+// Enviar respuesta a un mensaje
+export const sendReplyMessage = async (
+  fromUserId: string,
+  toUserId: string,
+  message: string,
+  replyToId: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .insert({
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
+        message,
+        message_type: 'text',
+        reply_to_id: replyToId,
+        is_read: false,
+      })
+
+    if (error) throw error
+    console.log('Respuesta enviada:', replyToId)
+  } catch (err: any) {
+    console.error('Error sending reply:', err)
+    throw err
+  }
+}
+
+// Fijar un mensaje
+export const pinMessage = async (messageId: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_pinned: true })
+      .eq('id', messageId)
+
+    if (error) throw error
+    console.log('Mensaje fijado:', messageId)
+  } catch (err: any) {
+    console.error('Error pinning message:', err)
+    throw err
+  }
+}
+
+// Desfijar un mensaje
+export const unpinMessage = async (messageId: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_pinned: false })
+      .eq('id', messageId)
+
+    if (error) throw error
+    console.log('Mensaje desfijado:', messageId)
+  } catch (err: any) {
+    console.error('Error unpinning message:', err)
+    throw err
+  }
+}
+
+// Obtener mensajes fijados de una conversación
+export const getPinnedMessages = async (
+  userId1: string,
+  userId2: string
+): Promise<Message[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(
+        `and(from_user_id.eq.${userId1},to_user_id.eq.${userId2}),and(from_user_id.eq.${userId2},to_user_id.eq.${userId1})`
+      )
+      .eq('is_pinned', true)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  } catch (err: any) {
+    console.error('Error getting pinned messages:', err)
+    return []
+  }
+}
+
+// Editar un mensaje
+export const editMessage = async (
+  messageId: string,
+  newMessage: string,
+  userId: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({
+        message: newMessage,
+        edited_at: new Date().toISOString(),
+        edited_by: userId,
+      })
+      .eq('id', messageId)
+
+    if (error) throw error
+    console.log('Mensaje editado:', messageId)
+  } catch (err: any) {
+    console.error('Error editing message:', err)
+    throw err
+  }
+}
+
+// Obtener un mensaje específico (para reply)
+export const getMessageById = async (messageId: string): Promise<Message | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single()
+
+    if (error) throw error
+    return data as Message
+  } catch (err: any) {
+    console.error('Error getting message:', err)
+    return null
+  }
+}
+

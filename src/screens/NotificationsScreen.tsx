@@ -75,9 +75,44 @@ export default function NotificationsScreen() {
       case 'review_pending':
         return { name: 'star' as const, color: COLORS.accent }
       case 'message':
-        return { name: 'mail' as const, color: COLORS.primary }
+        return { name: 'mail' as const, color: COLORS.info }
       default:
         return { name: 'notifications' as const, color: COLORS.primary }
+    }
+  }
+
+  const getNotificationTypeLabel = (type: Notification['type']) => {
+    switch (type) {
+      case 'booking':
+        return 'Reserva'
+      case 'trip_update':
+        return 'Ruta'
+      case 'driver_arrived':
+        return 'Ruta'
+      case 'trip_completed':
+        return 'Ruta'
+      case 'review_pending':
+        return 'Feedback'
+      case 'message':
+        return 'Chat'
+      default:
+        return 'General'
+    }
+  }
+
+  const getNotificationCategoryLabel = (type: Notification['type']) => {
+    switch (type) {
+      case 'message':
+        return 'Chat'
+      case 'booking':
+      case 'trip_update':
+      case 'driver_arrived':
+      case 'trip_completed':
+        return 'Ruta'
+      case 'review_pending':
+        return 'Feedback'
+      default:
+        return 'General'
     }
   }
 
@@ -149,9 +184,19 @@ export default function NotificationsScreen() {
           <View style={styles.headerTextContainer}>
             <View style={styles.titleRow}>
               <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
-              <Text style={styles.notificationTime}>{formatDate(item.created_at)}</Text>
+              <Ionicons
+                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={COLORS.textTertiary}
+              />
             </View>
-            {!item.is_read && <Text style={styles.notificationBadge}>No leído</Text>}
+            <View style={styles.subtitleRow}>
+              <Text style={styles.notificationTime}>{formatDate(item.created_at)}</Text>
+              <View style={styles.notificationTypePill}>
+                <Text style={styles.notificationTypeText}>{getNotificationTypeLabel(item.type)}</Text>
+              </View>
+              {!item.is_read && <Text style={styles.notificationBadge}>No leído</Text>}
+            </View>
           </View>
           <TouchableOpacity
             style={styles.deleteBtn}
@@ -228,8 +273,9 @@ export default function NotificationsScreen() {
           )}
         </View>
         {unreadCount > 0 && (
-          <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllAsRead}>
-            <Ionicons name="checkmark-done" size={22} color={COLORS.primary} />
+          <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllAsRead} activeOpacity={0.8}>
+            <Ionicons name="checkmark-done" size={18} color={COLORS.primary} />
+            <Text style={styles.markAllBtnText}>Marcar todas</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -364,6 +410,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceAlt,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -373,6 +421,7 @@ const styles = StyleSheet.create({
   notificationUnread: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '08',
   },
   notificationHeader: {
     flexDirection: 'row',
@@ -417,13 +466,52 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     alignSelf: 'flex-start',
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderRadius: 999,
     backgroundColor: COLORS.primary + '12',
-    color: COLORS.primary,
     ...TYPOGRAPHY.caption,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  notificationTypePill: {
+    marginTop: SPACING.xs,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  notificationTypeText: {
+    ...TYPOGRAPHY.caption,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  markAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 999,
+    backgroundColor: COLORS.surface,
+  },
+  markAllBtnText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  expandHintText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.primary,
+    marginTop: SPACING.sm,
+    textAlign: 'right',
   },
   deleteBtn: {
     padding: 8,

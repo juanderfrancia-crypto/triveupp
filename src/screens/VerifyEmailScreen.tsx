@@ -107,8 +107,8 @@ export default function VerifyEmailScreen() {
         const { clearPendingVerification } = useAppStore.getState()
         clearPendingVerification()
 
-        // Navegar al Home después de verificación exitosa
-        navigation.navigate('Home' as never)
+        // Navegar al Main después de verificación exitosa
+        navigation.navigate('Main' as never)
       }
     } catch (err: any) {
       if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {

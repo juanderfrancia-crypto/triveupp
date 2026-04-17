@@ -1,27 +1,51 @@
 import { supabase } from './supabase'
 
 /**
- * Get a signed URL for a file in storage (valid for 1 hour)
+ * Get a stable storage URL for a file.
+ * If the bucket is public, use the persistent public URL.
+ * Otherwise fall back to a longer-lived signed URL.
  */
-async function getSignedUrl(bucket: string, filePath: string): Promise<string> {
+const PUBLIC_BUCKETS = new Set(['profile-photos'])
+
+async function getStorageUrl(
+  bucket: string,
+  filePath: string,
+  options?: { allowPublicUrl?: boolean }
+): Promise<string> {
   try {
     const { data, error } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(filePath, 3600) // 1 hour
+      .createSignedUrl(filePath, 60 * 60 * 24 * 30) // 30 days
 
-    if (error) {
-      console.error('Error creating signed URL:', error)
-      // Fallback to public URL if signed URL fails
-      const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(filePath)
+    if (!error && data?.signedUrl) {
+      return data.signedUrl
+    }
+
+    const allowPublicUrl = options?.allowPublicUrl ?? PUBLIC_BUCKETS.has(bucket)
+
+    if (!allowPublicUrl) {
+      console.error('No se pudo generar signed URL y el bucket no permite URL pública:', error)
+      throw error || new Error('No se pudo generar la URL de storage')
+    }
+
+    console.warn('Signed URL unavailable, falling back to public URL:', error)
+
+    const { data: publicData, error: publicError } = await supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath)
+
+    if (publicData?.publicUrl && !publicData.publicUrl.includes('null')) {
       return publicData.publicUrl
     }
 
-    return data.signedUrl
+    if (publicError) {
+      console.error('Public URL unavailable:', publicError)
+    }
+
+    throw error || publicError || new Error('No se pudo generar la URL de storage')
   } catch (err) {
-    console.error('Error getting signed URL:', err)
-    // Return public URL as fallback
-    const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(filePath)
-    return publicData.publicUrl
+    console.error('Error getting storage URL:', err)
+    throw err
   }
 }
 
@@ -102,8 +126,8 @@ export async function uploadProfilePhoto(userId: string, fileUri: string): Promi
       throw new Error(`Error al subir la foto: ${uploadError.message}`)
     }
 
-    // Get signed URL (or public URL as fallback)
-    const photoUrl = await getSignedUrl('profile-photos', filePath)
+    // Get a stable storage URL for the uploaded profile image
+    const photoUrl = await getStorageUrl('profile-photos', filePath, { allowPublicUrl: true })
 
     console.log('Profile photo URL:', photoUrl)
 
@@ -133,6 +157,22 @@ export async function uploadProfilePhoto(userId: string, fileUri: string): Promi
  * @param routeId - Route ID (if available) or null to create generic vehicle photo
  * @param fileUri - Local URI of the image file
  */
+export async function getVehiclePhotoUrl(driverId: string): Promise<string | null> {
+  const candidatePaths = [`drivers/${driverId}/vehicle.jpg`, `${driverId}/vehicle.jpg`]
+
+  for (const filePath of candidatePaths) {
+    try {
+      const url = await getStorageUrl('vehicle-photos', filePath, { allowPublicUrl: false })
+      if (url) return url
+    } catch (error) {
+      console.warn(`Vehicle photo not found at ${filePath}:`, error)
+    }
+  }
+
+  console.error('Error getting vehicle photo URL: no valid path found')
+  return null
+}
+
 export async function uploadVehiclePhoto(
   driverId: string,
   routeId: string | null,
@@ -149,31 +189,58 @@ export async function uploadVehiclePhoto(
     // Read file as Uint8Array using fetch (cross-platform compatible)
     const bytes = await uriToUint8Array(fileUri)
 
-    // Create file path
-    const timestamp = Date.now()
-    const folder = routeId ? `drivers/${driverId}/routes/${routeId}` : `drivers/${driverId}`
-    const filePath = `${folder}/${timestamp}-vehicle.jpg`
+    // Create candidate file paths
+    const basePaths = routeId
+      ? [`drivers/${driverId}/routes/${routeId}`, `drivers/${driverId}`, `${driverId}/routes/${routeId}`, `${driverId}`]
+      : [`drivers/${driverId}`, `${driverId}`]
 
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
-      .from('vehicle-photos')
-      .upload(filePath, bytes, {
-        contentType: 'image/jpeg',
-        upsert: false,
-      })
+    let uploadedFilePath: string | null = null
+    let uploadError: any = null
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      throw new Error(`Error al subir la foto: ${uploadError.message}`)
+    for (const basePath of basePaths) {
+      const candidatePath = `${basePath}/vehicle.jpg`
+      const { error } = await supabase.storage
+        .from('vehicle-photos')
+        .upload(candidatePath, bytes, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        })
+
+      if (!error) {
+        uploadedFilePath = candidatePath
+        uploadError = null
+        break
+      }
+
+      console.warn(`Vehicle photo upload failed for path ${candidatePath}:`, error)
+      uploadError = error
     }
 
-    // Get signed URL (or public URL as fallback)
-    const photoUrl = await getSignedUrl('vehicle-photos', filePath)
+    if (!uploadedFilePath) {
+      console.error('Storage upload error:', uploadError)
+      throw new Error(`Error al subir la foto: ${uploadError?.message || uploadError}`)
+    }
+
+    // Get a stable storage URL for the uploaded vehicle image
+    const photoUrl = await getStorageUrl('vehicle-photos', uploadedFilePath, { allowPublicUrl: false })
 
     console.log('Vehicle photo URL:', photoUrl)
 
-    // Don't try to save to DB - just return the URL
-    // The URL is signed and will be valid for 1 hour
+    if (routeId) {
+      try {
+        const { error: dbError } = await supabase
+          .from('routes')
+          .update({ vehicle_photo_url: photoUrl })
+          .eq('id', routeId)
+
+        if (dbError) {
+          console.warn('Error updating route vehicle photo URL:', dbError)
+        }
+      } catch (dbErr) {
+        console.warn('Error saving route vehicle photo URL:', dbErr)
+      }
+    }
+
     return photoUrl
   } catch (error) {
     console.error('Error uploading vehicle photo:', error)

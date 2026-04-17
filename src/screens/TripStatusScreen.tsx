@@ -256,9 +256,6 @@ export default function TripStatusScreen() {
                     <Ionicons name="car" size={20} color={COLORS.primary} />
                   </View>
                   <View style={styles.actionButtonsColumn}>
-                    <TouchableOpacity style={styles.callBtn}>
-                      <Ionicons name="call" size={16} color="#fff" />
-                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.messageBtn}
                       onPress={() => {
@@ -926,4 +923,68 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+
+  // Passengers Card Styles
+  passengersCardGradient: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    paddingVertical: SPACING.md,
+  },
+  passengersList: {
+    paddingHorizontal: SPACING.md,
+  },
+  passengerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.md,
+  },
+  passengerItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  passengerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: SPACING.md,
+  },
+  passengerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passengerInitial: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  passengerDetails: {
+    flex: 1,
+  },
+  passengerName: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  passengerSeat: {
+    ...TYPOGRAPHY.labelSmall,
+    color: COLORS.textSecondary,
+  },
+  passengerChatBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
 })
+

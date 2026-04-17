@@ -47,9 +47,10 @@ LEFT JOIN profiles p ON r.driver_id = p.id
 WHERE 
   -- 🚀 MODELO INFORMAL: Mostrar rutas que salieron AHORA o próximas
   -- Permite conductores que publican su ruta hace poco (hasta 15 min atrás)
-  -- e incluye viajes que salen en los próximos 24 horas
-  r.departure_time > NOW() - INTERVAL '15 minutes'
-  AND r.departure_time <= NOW() + INTERVAL '24 hours'
+  -- e incluye viajes que salen en los próximos 24 horas.
+  -- Usar la hora local de Colombia porque departure_time se guarda como hora local.
+  r.departure_time > (NOW() AT TIME ZONE 'America/Bogota') - INTERVAL '15 minutes'
+  AND r.departure_time <= (NOW() AT TIME ZONE 'America/Bogota') + INTERVAL '24 hours'
   -- Solo rutas PROGRAMADAS (no en progreso ni completadas)
   AND r.status = 'scheduled'
   -- Solo si hay asientos disponibles

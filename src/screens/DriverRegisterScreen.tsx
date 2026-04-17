@@ -163,18 +163,19 @@ export default function DriverRegisterScreen() {
       const travelMinutes = parseInt(estimatedTravelMinutes, 10)
       const arrivalDateTime = new Date(departureDateTime.getTime() + travelMinutes * 60000)
 
-      // Convertir a ISO strings CON timezone (UTC)
-      // Esto es crítico para que la BD y la VIEW puedan comparar correctamente con NOW()
-      const departure_time_str = departureDateTime.toISOString()
-      const arrival_time_str = arrivalDateTime.toISOString()
+      // Guardar la hora local en un TIMESTAMP (sin timezone)
+      // El campo de la base de datos es TIMESTAMP sin zona horaria.
+      // Usar toLocalISOString evita que la hora se desplace por conversión UTC.
+      const departure_time_str = toLocalISOString(departureDateTime)
+      const arrival_time_str = toLocalISOString(arrivalDateTime)
 
       console.log('📅 TRANSACCIONES DE TIEMPO (MODELO INFORMAL):')
       console.log(`  Ahora (local): ${toLocalISOString(now)}`)
       console.log(`  Ahora (UTC): ${now.toISOString()}`)
       console.log(`  Espera de: ${departureDelayMinutes} minutos`)
-      console.log(`  Salida (UTC): ${departure_time_str}`)
+      console.log(`  Salida (local): ${departure_time_str}`)
       console.log(`  Duración viaje: ${travelMinutes} minutos`)
-      console.log(`  Llegada (UTC): ${arrival_time_str}`)
+      console.log(`  Llegada (local): ${arrival_time_str}`)
 
       // ⚠️ Validación informal: permitir rutas desde hace 15 minutos
       const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60000)

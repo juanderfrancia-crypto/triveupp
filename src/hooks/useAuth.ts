@@ -190,31 +190,11 @@ export const useAuth = () => {
   };
 
   const signInWithApple = async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      throw new Error('Apple sign-in no está implementado')
-    } catch (err: any) {
-      const message = err.message || 'Error de inicio de sesión con Apple'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
+    throw new Error('Apple Sign-In no está disponible');
   }
 
   const handleGoogleLogin = async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      throw new Error('Google sign-in no está implementado')
-    } catch (err: any) {
-      const message = err.message || 'Error de inicio de sesión con Google'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
+    throw new Error('Google Sign-In no está disponible');
   }
 
   const sendEmailVerification = async (email: string) => {

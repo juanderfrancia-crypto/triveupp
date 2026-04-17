@@ -279,7 +279,7 @@ export const useBookings = () => {
 
       await cleanupExpiredPendingBookings(routeId);
 
-      let query = supabase.from("bookings").select(`*`).eq("route_id", routeId);
+      let query = supabase.from("bookings").select(`*, profiles:passenger_id(id, name)`).eq("route_id", routeId);
 
       if (includePending) {
         // Include any booking that is not cancelled so seat availability matches DB constraints.

@@ -46,16 +46,12 @@ export default function AvailableRidesScreen() {
   }
 
   const formatTime = (dateString: string) => {
-    // Si no tiene Z, agrégalo para que se interprete como UTC
-    const dateWithTimezone = dateString.includes('Z') ? dateString : dateString + 'Z'
-    const date = new Date(dateWithTimezone)
+    const date = new Date(dateString)
     return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   }
 
   const getMinutesUntilDeparture = (dateString: string) => {
-    // Si no tiene Z, agrégalo para que se interprete como UTC
-    const dateWithTimezone = dateString.includes('Z') ? dateString : dateString + 'Z'
-    const date = new Date(dateWithTimezone)
+    const date = new Date(dateString)
     const now = new Date()
     const diffMs = date.getTime() - now.getTime()
     const diffMins = Math.round(diffMs / 60000)

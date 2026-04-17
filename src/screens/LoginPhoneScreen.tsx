@@ -74,13 +74,7 @@ export default function LoginPhoneScreen() {
       setIsSubmitting(true)
       await signInWithOTP(phone)
       setStep('otp')
-      errorHandler.handle(
-        `✅ Código enviado al ${phone}. Válido por 10 minutos.`,
-        ErrorType.UNKNOWN,
-        ErrorSeverity.LOW,
-        true,
-        { context: 'otp_sent', phone }
-      )
+      showToast(`✅ Código enviado al ${phone}. Válido por 10 minutos.`, 'success')
     } catch (err: any) {
       if (err.message?.includes('Network') || err.message?.includes('Failed to fetch')) {
         errorHandler.handle(
@@ -280,7 +274,7 @@ export default function LoginPhoneScreen() {
                     <Ionicons name="call-outline" size={20} color={errors.phone ? COLORS.error : COLORS.textSecondary} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Ej: 300 123 4567"
+                      placeholder="Ej: +57 300 123 4567"
                       placeholderTextColor={COLORS.textTertiary}
                       keyboardType="phone-pad"
                       value={phone}

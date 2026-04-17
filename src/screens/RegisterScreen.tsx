@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const lastRegisterAttempt = useRef<number>(0)
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
@@ -68,6 +69,14 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!validate()) return
 
+    // Prevenir múltiples intentos rápidos (debounce)
+    const now = Date.now()
+    if (now - lastRegisterAttempt.current < 3000) {
+      Alert.alert('Espera un momento', 'Por favor espera unos segundos antes de intentar nuevamente')
+      return
+    }
+    lastRegisterAttempt.current = now
+
     try {
       setIsSubmitting(true)
       const data = await register(
@@ -90,7 +99,18 @@ export default function RegisterScreen() {
         } as never)
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Error al crear la cuenta')
+      let errorMessage = err.message || 'Error al crear la cuenta'
+      
+      // Detectar y manejar error de rate limit
+      if (errorMessage.includes('rate limit') || errorMessage.includes('too_many_requests')) {
+        errorMessage = 'Demasiados intentos. Por favor espera 1 hora antes de intentar nuevamente.'
+      } else if (errorMessage.includes('already exists')) {
+        errorMessage = 'Este correo ya está registrado. Intenta iniciar sesión.'
+      } else if (errorMessage.includes('invalid')) {
+        errorMessage = 'Datos inválidos. Revisa tu información.'
+      }
+      
+      Alert.alert('Error en el Registro', errorMessage)
     } finally {
       setIsSubmitting(false)
     }
@@ -150,7 +170,7 @@ export default function RegisterScreen() {
             <Ionicons name="call-outline" size={20} color={errors.phone ? '#D32F2F' : COLORS.textSecondary} />
             <TextInput
               style={styles.input}
-              placeholder="Teléfono"
+              placeholder="Ej: +57 300 123 4567"
               placeholderTextColor={COLORS.textSecondary}
               keyboardType="phone-pad"
               {...inputProps('phone', phone, setPhone)}

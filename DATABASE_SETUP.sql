@@ -157,9 +157,9 @@ BEGIN
     EXECUTE 'DROP POLICY IF EXISTS "Users can insert their messages" ON messages';
     EXECUTE 'CREATE POLICY "Users can insert their messages" ON messages FOR INSERT WITH CHECK (auth.uid() = from_user_id AND from_user_id <> to_user_id)';
     EXECUTE 'DROP POLICY IF EXISTS "Users can update their messages" ON messages';
-    EXECUTE 'CREATE POLICY "Users can update their messages" ON messages FOR UPDATE USING (auth.uid() = from_user_id OR auth.uid() = to_user_id) WITH CHECK (auth.uid() = from_user_id OR auth.uid() = to_user_id)';
+    EXECUTE 'CREATE POLICY "Users can update their messages" ON messages FOR UPDATE USING (auth.uid() = from_user_id) WITH CHECK (auth.uid() = from_user_id)';
     EXECUTE 'DROP POLICY IF EXISTS "Users can delete their messages" ON messages';
-    EXECUTE 'CREATE POLICY "Users can delete their messages" ON messages FOR DELETE USING (auth.uid() = from_user_id OR auth.uid() = to_user_id)';
+    EXECUTE 'CREATE POLICY "Users can delete their messages" ON messages FOR DELETE USING (auth.uid() = from_user_id)';
   END IF;
 END;
 $$;

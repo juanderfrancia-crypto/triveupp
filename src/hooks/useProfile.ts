@@ -7,6 +7,7 @@ export interface Profile {
   email: string;
   phone?: string;
   avatar_url?: string;
+  vehicle_photo_url?: string;
   role: "passenger" | "driver" | "support";
   rating: number;
   total_trips: number;

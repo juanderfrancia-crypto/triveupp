@@ -67,11 +67,18 @@ export const useChat = (userId?: string) => {
     async (otherUserId: string) => {
       if (!userId) return
 
+      if (__DEV__) {
+        console.log('[useChat] loadConversation', { userId, otherUserId })
+      }
+
       try {
         setError(null)
         setLoading(true)
         setCurrentOtherUserId(otherUserId)
         const data = await getConversation(userId, otherUserId)
+        if (__DEV__) {
+          console.log('[useChat] loadConversation result', { otherUserId, length: (data || []).length })
+        }
         setMessages(data)
       } catch (err: any) {
         setError(err.message)
@@ -118,6 +125,9 @@ export const useChat = (userId?: string) => {
       try {
         setError(null)
         const newMessage = await sendMessage(userId, currentOtherUserId, text, bookingId)
+        if (__DEV__) {
+          console.log('[useChat] send result', { userId, currentOtherUserId, newMessage })
+        }
         setMessages(prev => [...prev, newMessage])
       } catch (err: any) {
         setError(err.message)

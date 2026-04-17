@@ -17,9 +17,11 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
 import { checkDriverApprovalStatus, getDriverRestrictionMessage, type DriverApprovalStatus } from '../services/driverApproval'
+import { useNotifications } from '../hooks/useNotifications'
 
 interface Passenger {
-  id: string
+  booking_id: string
+  passenger_id: string
   name: string
   email: string
   phone: string
@@ -78,7 +80,8 @@ export default function DriverPanelScreen() {
             .eq('booking_status', 'confirmed')
 
           const passengers: Passenger[] = (bookings || []).map((b: any) => ({
-            id: b.id,
+            booking_id: b.id,
+            passenger_id: b.passenger_id,
             name: b.passenger?.name || 'Pasajero',
             email: b.passenger?.email || '',
             phone: b.passenger?.phone || '',
@@ -138,6 +141,29 @@ export default function DriverPanelScreen() {
     checkApprovalStatus()
   }, [user?.id])
 
+  const { createNotification } = useNotifications(user?.id)
+
+  const notifyPassengers = async (route: DriverRoute) => {
+    if (!route.passengers?.length) return
+
+    try {
+      await Promise.all(
+        route.passengers.map((passenger) =>
+          createNotification(passenger.passenger_id, {
+            user_id: passenger.passenger_id,
+            type: 'trip_update',
+            title: 'Tu viaje ha iniciado',
+            message: `El viaje ${route.origin} → ${route.destination} ya comenzó. Tu asiento está confirmado.`,
+            data: { route_id: route.id },
+            is_read: false,
+          })
+        )
+      )
+    } catch (err: any) {
+      console.error('Error notificando a los pasajeros:', err)
+    }
+  }
+
   const onRefresh = () => {
     setRefreshing(true)
     fetchDriverRoutes()
@@ -152,6 +178,13 @@ export default function DriverPanelScreen() {
         .eq('id', routeId)
 
       if (error) throw error
+
+      if (newStatus === 'in_progress') {
+        const route = routes.find((routeItem) => routeItem.id === routeId)
+        if (route) {
+          await notifyPassengers(route)
+        }
+      }
 
       Alert.alert(
         'Éxito',
@@ -371,7 +404,7 @@ export default function DriverPanelScreen() {
                   <View style={styles.passengersSection}>
                     <Text style={styles.passengersTitle}>Pasajeros</Text>
                     {route.passengers.map((passenger, index) => (
-                      <View key={passenger.id} style={styles.passengerItem}>
+                      <View key={passenger.booking_id} style={styles.passengerItem}>
                         <View style={styles.passengerAvatar}>
                           <Text style={styles.passengerInitials}>
                             {passenger.name.charAt(0).toUpperCase()}

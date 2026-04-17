@@ -137,13 +137,9 @@ export default function BookingScreen() {
           console.error('Error creando notificación:', notifError)
         }
 
-        errorHandler.handle(
-          `✅ Reserva confirmada. Asientos: ${seat_numbers.join(', ')}`,
-          ErrorType.UNKNOWN,
-          ErrorSeverity.LOW,
-          true,
-          { context: 'booking_success', route_id: selectedRoute.id }
-        )
+        setToastType('success')
+        setToastMessage(`✅ Reserva confirmada. Asientos: ${seat_numbers.join(', ')}`)
+        setToastVisible(true)
         setTimeout(() => navigation.navigate('TripStatus' as never), 1500)
       } else {
         errorHandler.handle(
