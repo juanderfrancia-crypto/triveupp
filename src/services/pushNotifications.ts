@@ -309,3 +309,109 @@ export const sendPushNotificationToUser = async (
     return false
   }
 }
+
+// Enviar notificación de cancelación de viaje
+export const notifyTripCancellation = async (
+  bookingId: string,
+  cancellerUserId: string,
+  cancelReason?: string
+) => {
+  try {
+    console.log('[DEBUG notifyTripCancellation] Enviando notificación de cancelación:', bookingId)
+
+    // Obtener información del booking con driver y pasajero
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(
+        `
+        id,
+        passenger_id,
+        routes(
+          id,
+          driver_id,
+          origin,
+          destination,
+          departure_time,
+          profiles(
+            id,
+            name,
+            push_token
+          )
+        ),
+        passenger:passenger_id(
+          id,
+          name,
+          push_token
+        )
+      `
+      )
+      .eq('id', bookingId)
+      .single()
+
+    if (bookingError) {
+      console.error('[DEBUG notifyTripCancellation] Error fetching booking:', bookingError)
+      return false
+    }
+
+    if (!booking) {
+      console.log('[DEBUG notifyTripCancellation] Booking no encontrado')
+      return false
+    }
+
+    const route = booking.routes
+    const driver = route?.profiles
+    const passenger = booking.passenger
+
+    if (!route || !driver || !passenger) {
+      console.log('[DEBUG notifyTripCancellation] Información incompleta del booking')
+      return false
+    }
+
+    // Determinar quién cancela y a quién notificar
+    const isPassengerCancelling = cancellerUserId === booking.passenger_id
+    const recipientToken = isPassengerCancelling ? driver?.push_token : passenger?.push_token
+    const recipientName = isPassengerCancelling ? driver?.name : passenger?.name
+    const cancellerName = isPassengerCancelling ? passenger?.name : driver?.name
+
+    if (!recipientToken) {
+      console.log('[DEBUG notifyTripCancellation] No hay push token para el destinatario')
+      return false
+    }
+
+    // Construir mensaje de notificación
+    const notificationTitle = isPassengerCancelling
+      ? '❌ Pasajero canceló el viaje'
+      : '❌ Conductor canceló el viaje'
+
+    const routeInfo = `${route.origin} → ${route.destination}`
+    const reasonText = cancelReason ? ` (${cancelReason})` : ''
+    const notificationBody = `De ${cancellerName}: ${routeInfo}${reasonText}`
+
+    console.log('[DEBUG notifyTripCancellation] Enviando a token:', recipientToken)
+    console.log('[DEBUG notifyTripCancellation] Título:', notificationTitle)
+    console.log('[DEBUG notifyTripCancellation] Body:', notificationBody)
+
+    // Enviar notificación push
+    const pushResult = await sendPushNotificationToUser(
+      recipientToken,
+      notificationTitle,
+      notificationBody,
+      {
+        type: 'trip_cancelled',
+        booking_id: bookingId,
+        route_id: route.id,
+        origin: route.origin,
+        destination: route.destination,
+        canceller_id: cancellerUserId,
+        canceller_name: cancellerName,
+        reason: cancelReason || 'Sin especificar',
+      }
+    )
+
+    console.log('[DEBUG notifyTripCancellation] Push result:', pushResult)
+    return pushResult
+  } catch (error) {
+    console.error('[DEBUG notifyTripCancellation] Error:', error)
+    return false
+  }
+}

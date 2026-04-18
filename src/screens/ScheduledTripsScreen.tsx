@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
+import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
 
 export default function ScheduledTripsScreen() {
@@ -120,6 +121,13 @@ export default function ScheduledTripsScreen() {
     try {
       // Cancelar en Supabase
       await cancelBooking(bookingId)
+
+      // Enviar notificación al conductor (sin esperar respuesta)
+      if (user?.id) {
+        notifyTripCancellation(bookingId, user.id, 'Cancelado por pasajero').catch(err => {
+          console.warn('Error sending cancellation notification:', err)
+        })
+      }
       
       // Crear nueva lista sin el viaje cancelado
       const updatedTrips = trips.filter((trip) => trip.id !== bookingId)

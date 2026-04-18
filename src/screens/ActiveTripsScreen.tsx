@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
+import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
 
 interface ActiveTrip {
@@ -183,6 +184,13 @@ export default function ActiveTripsScreen() {
         .eq('id', trip.bookingId)
 
       if (error) throw error
+
+      // Enviar notificación al conductor (sin esperar respuesta)
+      if (user?.id) {
+        notifyTripCancellation(trip.bookingId, user.id, 'Cancelado por pasajero').catch(err => {
+          console.warn('Error sending cancellation notification:', err)
+        })
+      }
 
       setToastConfig({
         visible: true,

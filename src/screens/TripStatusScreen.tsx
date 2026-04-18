@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
+import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
 
 export default function TripStatusScreen() {
@@ -88,6 +89,14 @@ export default function TripStatusScreen() {
       setCancelLoading(true)
       setShowConfirmModal(false)
       await cancelBooking(userBooking.id)
+
+      // Enviar notificación al conductor (sin esperar respuesta)
+      if (user?.id) {
+        notifyTripCancellation(userBooking.id, user.id, 'Cancelado por pasajero').catch(err => {
+          console.warn('Error sending cancellation notification:', err)
+        })
+      }
+
       setToastConfig({ visible: true, message: '✓ Reserva cancelada exitosamente', type: 'success' })
       setTimeout(() => {
         navigation.navigate('Main' as never, { screen: 'Home' } as never)
