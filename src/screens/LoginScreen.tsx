@@ -139,13 +139,11 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Image 
-                source={require('../../assets/logo.png')} 
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+            <Image 
+              source={require('../../assets/logo.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
           </View>
 
@@ -275,15 +273,10 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xl,
     alignItems: 'center',
   },
-  logoContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
   logoImage: {
     width: 400,
     height: 160,
+    marginBottom: 12,
   },
   subtitle: {
     ...TYPOGRAPHY.body,
