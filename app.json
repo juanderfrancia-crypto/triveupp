@@ -37,8 +37,7 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Trive necesita tu ubicación para mostrar el progreso del viaje"
         }
-      ],
-      "sentry-expo"
+      ]
     ],
     "extra": {
       "eas": {
