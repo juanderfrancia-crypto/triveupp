@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  Animated,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -17,12 +18,20 @@ import { useAppStore } from '../store/useAppStore'
 import { useNotifications } from '../hooks/useNotifications'
 import { Notification } from '../hooks/useNotifications'
 
+type NotificationCategory = 'all' | 'chat' | 'ruta' | 'feedback' | 'booking'
+
+interface NotificationWithSender extends Notification {
+  senderName?: string
+  senderType?: 'system' | 'user'
+}
+
 export default function NotificationsScreen() {
   const navigation = useNavigation()
   const { user } = useAppStore()
   const { notifications, loading, unreadCount, markAsRead, markAllAsRead, deleteNotification, fetchNotifications } = useNotifications(user?.id)
   const [refreshing, setRefreshing] = useState(false)
-  const [expandedNotificationId, setExpandedNotificationId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<NotificationCategory>('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -36,86 +45,67 @@ export default function NotificationsScreen() {
     setRefreshing(false)
   }
 
-  const handleMarkAsRead = (notificationId: string) => {
-    markAsRead(notificationId)
-  }
+  // Obtener nombre del remitente basado en datos
+  const getNotificationWithSender = (notif: Notification): NotificationWithSender => {
+    let senderName = 'Sistema'
+    let senderType: 'system' | 'user' = 'system'
 
-  const handleToggleNotification = (notificationId: string, isRead: boolean) => {
-    if (!isRead) {
-      markAsRead(notificationId)
+    // Si el mensaje tiene sender_id en data, es de otro usuario
+    if (notif.data?.sender_id && typeof notif.data.sender_id === 'string') {
+      senderName = notif.data.sender_name || 'Usuario'
+      senderType = 'user'
+    } else if (notif.data?.from_user_name) {
+      senderName = notif.data.from_user_name
+      senderType = 'user'
     }
-    setExpandedNotificationId((prev) => (prev === notificationId ? null : notificationId))
+
+    return { ...notif, senderName, senderType }
   }
 
-  const handleDelete = (notificationId: string) => {
-    Alert.alert('Eliminar', '¿Eliminar esta notificación?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => deleteNotification(notificationId),
+  // Filtrar notificaciones por categoría
+  const filteredNotifications = useMemo(() => {
+    if (selectedCategory === 'all') return notifications.map(getNotificationWithSender)
+
+    return notifications
+      .filter((notif) => {
+        if (selectedCategory === 'chat') return notif.type === 'message'
+        if (selectedCategory === 'ruta')
+          return ['trip_update', 'driver_arrived', 'trip_completed', 'booking'].includes(notif.type)
+        if (selectedCategory === 'feedback') return notif.type === 'review_pending'
+        if (selectedCategory === 'booking') return notif.type === 'booking'
+        return true
+      })
+      .map(getNotificationWithSender)
+  }, [notifications, selectedCategory])
+
+  // Obtener color e icono por tipo
+  const getCategoryStyle = (type: Notification['type']) => {
+    const styles: Record<
+      string,
+      { color: string; bgColor: string; icon: string; category: string }
+    > = {
+      message: { color: '#007AFF', bgColor: '#007AFF15', icon: 'chatbubble', category: 'Chat' },
+      trip_update: {
+        color: '#34C759',
+        bgColor: '#34C75915',
+        icon: 'navigate-outline',
+        category: 'Ruta',
       },
-    ])
-  }
-
-  const handleMarkAllAsRead = () => {
-    markAllAsRead()
-  }
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'booking':
-        return { name: 'checkmark-circle' as const, color: COLORS.primary }
-      case 'trip_update':
-        return { name: 'car' as const, color: COLORS.primary }
-      case 'driver_arrived':
-        return { name: 'navigate' as const, color: COLORS.accent }
-      case 'trip_completed':
-        return { name: 'flag' as const, color: COLORS.primary }
-      case 'review_pending':
-        return { name: 'star' as const, color: COLORS.accent }
-      case 'message':
-        return { name: 'mail' as const, color: COLORS.info }
-      default:
-        return { name: 'notifications' as const, color: COLORS.primary }
+      driver_arrived: { color: '#34C759', bgColor: '#34C75915', icon: 'pin', category: 'Ruta' },
+      trip_completed: { color: '#34C759', bgColor: '#34C75915', icon: 'checkmark-circle', category: 'Ruta' },
+      booking: { color: '#AF52DE', bgColor: '#AF52DE15', icon: 'checkmark', category: 'Reserva' },
+      review_pending: { color: '#FF9500', bgColor: '#FF950015', icon: 'star', category: 'Feedback' },
     }
+    return styles[type] || styles['message']
   }
 
-  const getNotificationTypeLabel = (type: Notification['type']) => {
-    switch (type) {
-      case 'booking':
-        return 'Reserva'
-      case 'trip_update':
-        return 'Ruta'
-      case 'driver_arrived':
-        return 'Ruta'
-      case 'trip_completed':
-        return 'Ruta'
-      case 'review_pending':
-        return 'Feedback'
-      case 'message':
-        return 'Chat'
-      default:
-        return 'General'
-    }
+  // Preview inteligente del contenido
+  const getMessagePreview = (message: string, maxLength: number = 60) => {
+    if (message.length <= maxLength) return message
+    return message.substring(0, maxLength).trim() + '...'
   }
 
-  const getNotificationCategoryLabel = (type: Notification['type']) => {
-    switch (type) {
-      case 'message':
-        return 'Chat'
-      case 'booking':
-      case 'trip_update':
-      case 'driver_arrived':
-      case 'trip_completed':
-        return 'Ruta'
-      case 'review_pending':
-        return 'Feedback'
-      default:
-        return 'General'
-    }
-  }
-
+  // Formato de fecha
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -129,170 +119,215 @@ export default function NotificationsScreen() {
     if (diffHours < 24) return `Hace ${diffHours}h`
     if (diffDays < 7) return `Hace ${diffDays}d`
 
-    return date.toLocaleDateString('es-CO', {
-      month: 'short',
-      day: 'numeric',
-    })
+    return date.toLocaleDateString('es-CO', { month: 'short', day: 'numeric' })
   }
 
-  const getPrettyDataLabel = (key: string) => {
-    const map: Record<string, string> = {
-      route_id: 'Ruta',
-      booking_id: 'Reserva',
-      seat_numbers: 'Asientos',
-      departure_time: 'Fecha de partida',
-      user_id: 'Usuario',
-    }
-    return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (chr) => chr.toUpperCase())
-  }
-
-  const formatNotificationValue = (key: string, value: any) => {
-    if (value === null || value === undefined) return '-'
-    if (Array.isArray(value)) return value.join(', ')
-    if (key === 'departure_time' || key === 'created_at') {
-      const date = new Date(String(value))
-      return date.toLocaleString('es-CO', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    }
-    return String(value)
-  }
-
-  const shouldDisplayDataKey = (key: string) => {
-    const hiddenKeys = ['route_id', 'booking_id', 'user_id']
-    return !hiddenKeys.includes(key)
-  }
-
-  const renderNotificationItem = ({ item }: { item: Notification }) => {
-    const icon = getNotificationIcon(item.type)
-    const isExpanded = expandedNotificationId === item.id
+  // Componente de tarjeta de notificación
+  const NotificationCard = ({ item }: { item: NotificationWithSender }) => {
+    const style = getCategoryStyle(item.type)
+    const isExpanded = expandedId === item.id
+    const isUnread = !item.is_read
 
     return (
       <TouchableOpacity
-        style={[styles.notificationCard, !item.is_read && styles.notificationUnread]}
-        onPress={() => handleToggleNotification(item.id, item.is_read)}
-        activeOpacity={0.9}
+        style={[
+          styleSheet.notificationCard,
+          isUnread && styleSheet.notificationCardUnread,
+          isExpanded && styleSheet.notificationCardExpanded,
+        ]}
+        onPress={() => {
+          if (isUnread) markAsRead(item.id)
+          setExpandedId(isExpanded ? null : item.id)
+        }}
+        activeOpacity={0.8}
       >
-        <View style={styles.notificationHeader}>
-          <View style={[styles.iconWrapper, { backgroundColor: icon.color + '20' }]}> 
-            <Ionicons name={icon.name} size={22} color={icon.color} />
+        {/* Indicador de no leído */}
+        {isUnread && <View style={styleSheet.unreadIndicator} />}
+
+        {/* Encabezado con icono y categoría */}
+        <View style={styleSheet.cardHeader}>
+          <View style={[styleSheet.iconContainer, { backgroundColor: style.bgColor }]}>
+            <Ionicons name={style.icon as any} size={20} color={style.color} />
           </View>
-          <View style={styles.headerTextContainer}>
-            <View style={styles.titleRow}>
-              <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
-              <Ionicons
-                name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color={COLORS.textTertiary}
-              />
+
+          <View style={styleSheet.headerContent}>
+            <View style={styleSheet.titleRow}>
+              <Text style={styleSheet.categoryBadge} numberOfLines={1}>
+                {style.category}
+              </Text>
+              {isUnread && <View style={styleSheet.readDot} />}
             </View>
-            <View style={styles.subtitleRow}>
-              <Text style={styles.notificationTime}>{formatDate(item.created_at)}</Text>
-              <View style={styles.notificationTypePill}>
-                <Text style={styles.notificationTypeText}>{getNotificationTypeLabel(item.type)}</Text>
-              </View>
-              {!item.is_read && <Text style={styles.notificationBadge}>No leído</Text>}
+
+            <Text style={styleSheet.notificationTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+
+            {/* Quién envió */}
+            <View style={styleSheet.senderRow}>
+              <Text style={styleSheet.senderLabel}>De:</Text>
+              <Text style={[styleSheet.senderName, { color: style.color }]} numberOfLines={1}>
+                {item.senderName}
+              </Text>
             </View>
           </View>
+
+          {/* Botón eliminar */}
           <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => handleDelete(item.id)}
+            style={styleSheet.deleteButton}
+            onPress={() => {
+              Alert.alert('Eliminar', '¿Eliminar esta notificación?', [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Eliminar',
+                  style: 'destructive',
+                  onPress: () => deleteNotification(item.id),
+                },
+              ])
+            }}
           >
-            <Ionicons name="close" size={18} color={COLORS.textTertiary} />
+            <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
         </View>
-        <View style={styles.notificationBody}>
-          <Text style={styles.notificationMessage} numberOfLines={isExpanded ? undefined : 3}>
-            {item.message}
+
+        {/* Preview del mensaje */}
+        <View style={styleSheet.messagePreview}>
+          <Text style={styleSheet.previewText} numberOfLines={isExpanded ? undefined : 2}>
+            "{getMessagePreview(item.message)}"
           </Text>
-          {isExpanded && item.data && Object.keys(item.data).some((key) => shouldDisplayDataKey(key)) && (
-            <View style={styles.notificationData}>
-              {Object.entries(item.data)
-                .filter(([key]) => shouldDisplayDataKey(key))
-                .map(([key, value]) => (
-                  <View key={key} style={styles.notificationDataRow}>
-                    <Text style={styles.notificationDataKey}>{getPrettyDataLabel(key)}:</Text>
-                    <Text style={styles.notificationDataValue}>{formatNotificationValue(key, value)}</Text>
-                  </View>
-                ))}
-            </View>
-          )}
-          <Text style={styles.expandHintText}>{isExpanded ? 'Cerrar' : 'Ver más'}</Text>
         </View>
+
+        {/* Footer con tiempo */}
+        <View style={styleSheet.cardFooter}>
+          <Text style={styleSheet.timeText}>{formatDate(item.created_at)}</Text>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={COLORS.textTertiary}
+          />
+        </View>
+
+        {/* Detalles expandidos */}
+        {isExpanded && item.data && (
+          <View style={styleSheet.expandedDetails}>
+            {Object.entries(item.data)
+              .filter(([key]) => !['sender_id', 'sender_name', 'from_user_name'].includes(key))
+              .slice(0, 4)
+              .map(([key, value]) => (
+                <View key={key} style={styleSheet.detailRow}>
+                  <Text style={styleSheet.detailKey}>
+                    {key.replace(/_/g, ' ').charAt(0).toUpperCase() + key.replace(/_/g, ' ').slice(1)}:
+                  </Text>
+                  <Text style={styleSheet.detailValue}>{String(value).substring(0, 40)}</Text>
+                </View>
+              ))}
+          </View>
+        )}
       </TouchableOpacity>
     )
   }
 
-  const EmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconWrapper}>
-        <Ionicons name="notifications-off-outline" size={48} color={COLORS.textTertiary} />
+  // Filtros por categoría
+  const CategoryFilter = () => {
+    const categories: { id: NotificationCategory; label: string; icon: string }[] = [
+      { id: 'all', label: 'Todas', icon: 'list' },
+      { id: 'chat', label: 'Chat', icon: 'chatbubble' },
+      { id: 'ruta', label: 'Ruta', icon: 'navigate' },
+      { id: 'feedback', label: 'Feedback', icon: 'star' },
+      { id: 'booking', label: 'Reserva', icon: 'checkmark' },
+    ]
+
+    return (
+      <View style={styleSheet.filterContainer}>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[
+              styleSheet.filterButton,
+              selectedCategory === cat.id && styleSheet.filterButtonActive,
+            ]}
+            onPress={() => setSelectedCategory(cat.id)}
+          >
+            <Ionicons
+              name={cat.icon as any}
+              size={16}
+              color={selectedCategory === cat.id ? COLORS.primary : COLORS.textSecondary}
+            />
+            <Text
+              style={[
+                styleSheet.filterText,
+                selectedCategory === cat.id && styleSheet.filterTextActive,
+              ]}
+            >
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-      <Text style={styles.emptyTitle}>Sin notificaciones</Text>
-      <Text style={styles.emptyText}>Las notificaciones aparecerán aquí</Text>
+    )
+  }
+
+  // Empty State
+  const EmptyState = () => (
+    <View style={styleSheet.emptyContainer}>
+      <View style={styleSheet.emptyIconWrapper}>
+        <Ionicons name="notifications-off-outline" size={56} color={COLORS.textTertiary} />
+      </View>
+      <Text style={styleSheet.emptyTitle}>Sin notificaciones</Text>
+      <Text style={styleSheet.emptySubtitle}>
+        {selectedCategory === 'all'
+          ? 'Las notificaciones aparecerán aquí'
+          : `Sin notificaciones en ${selectedCategory}`}
+      </Text>
     </View>
   )
 
   return (
-    <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      {/* Fondo con círculos decorativos 3D */}
-      <View style={styles.bgContainer}>
-        <LinearGradient
-          colors={[COLORS.primaryLight + '32', COLORS.primary + '16', COLORS.primaryDark + '06']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle1]}
-        />
-        <LinearGradient
-          colors={[COLORS.primaryLight + '25', COLORS.primary + '12', COLORS.primaryDark + '04']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientCircle, styles.gradientCircle2]}
-        />
-      </View>
-
-      {/* Header */}
-      <View style={styles.header}>
+    <SafeAreaView style={styleSheet.safeContainer} edges={['top', 'left', 'right']}>
+      {/* Encabezado */}
+      <View style={styleSheet.header}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={styleSheet.backButton}
           onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
         >
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Notificaciones</Text>
+
+        <View style={styleSheet.headerTitle}>
+          <Text style={styleSheet.title}>Notificaciones</Text>
           {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount}</Text>
+            <View style={styleSheet.badge}>
+              <Text style={styleSheet.badgeText}>{unreadCount}</Text>
             </View>
           )}
         </View>
+
         {unreadCount > 0 && (
-          <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllAsRead} activeOpacity={0.8}>
-            <Ionicons name="checkmark-done" size={18} color={COLORS.primary} />
-            <Text style={styles.markAllBtnText}>Marcar todas</Text>
+          <TouchableOpacity
+            style={styleSheet.markAllButton}
+            onPress={markAllAsRead}
+          >
+            <Ionicons name="checkmark-done" size={16} color={COLORS.primary} />
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Filtros */}
+      <CategoryFilter />
+
       {/* Lista */}
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Cargando...</Text>
+        <View style={styleSheet.loadingContainer}>
+          <Ionicons name="hourglass-outline" size={40} color={COLORS.textTertiary} />
+          <Text style={styleSheet.loadingText}>Cargando notificaciones...</Text>
         </View>
-      ) : notifications.length === 0 ? (
+      ) : filteredNotifications.length === 0 ? (
         <EmptyState />
       ) : (
         <FlatList
-          data={notifications}
+          data={filteredNotifications}
           keyExtractor={(item) => item.id}
-          renderItem={renderNotificationItem}
-          contentContainerStyle={styles.listContent}
+          renderItem={(props) => <NotificationCard {...props} />}
+          contentContainerStyle={styleSheet.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
           }
@@ -303,35 +338,10 @@ export default function NotificationsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styleSheet = StyleSheet.create({
   safeContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-
-  // Fondo con círculos decorativos 3D
-  bgContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gradientCircle: {
-    position: 'absolute',
-    borderRadius: 9999,
-  },
-  gradientCircle1: {
-    top: -100,
-    right: -80,
-    width: 280,
-    height: 280,
-  },
-  gradientCircle2: {
-    top: 150,
-    left: -100,
-    width: 340,
-    height: 340,
   },
 
   // Header
@@ -340,50 +350,236 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
-  backBtn: {
+  backButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  headerContent: {
+  headerTitle: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
   title: {
-    ...TYPOGRAPHY.h4,
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
   },
   badge: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 8,
+    minWidth: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
   },
   badgeText: {
-    fontSize: 11,
+    ...TYPOGRAPHY.caption,
     fontWeight: '700',
     color: '#fff',
   },
-  markAllBtn: {
+  markAllButton: {
     width: 44,
     height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // Filtros
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 999,
+    backgroundColor: COLORS.surface,
+    gap: SPACING.xs,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+
+  // Lista
+  listContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 100,
+    gap: SPACING.md,
+  },
+
+  // Tarjeta de notificación
+  notificationCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.sm,
+  },
+  notificationCardUnread: {
+    backgroundColor: COLORS.primary + '08',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  notificationCardExpanded: {
+    borderColor: COLORS.primary,
+  },
+
+  unreadIndicator: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.md,
+  },
+
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  headerContent: {
+    flex: 1,
+    gap: SPACING.xs,
+  },
+
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+
+  categoryBadge: {
+    ...TYPOGRAPHY.label,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+
+  readDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+
+  notificationTitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+
+  senderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+
+  senderLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textTertiary,
+    fontWeight: '600',
+  },
+
+  senderName: {
+    ...TYPOGRAPHY.caption,
+    fontWeight: '700',
+  },
+
+  deleteButton: {
+    padding: SPACING.sm,
+    marginTop: -SPACING.sm,
+  },
+
+  messagePreview: {
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.primary + '30',
+  },
+
+  previewText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+
+  timeText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textTertiary,
+  },
+
+  expandedDetails: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  detailKey: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textTertiary,
+    fontWeight: '600',
+  },
+
+  detailValue: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textPrimary,
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: SPACING.sm,
   },
 
   // Loading
@@ -391,168 +587,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: SPACING.md,
   },
+
   loadingText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
   },
 
-  // Lista
-  listContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: 100,
-    paddingTop: SPACING.md,
-  },
-
-  // Notification Card
-  notificationCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceAlt,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  notificationUnread: {
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '08',
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  notificationBody: {
-    marginTop: SPACING.sm,
-  },
-  iconWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  notificationTitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '700',
-    flex: 1,
-  },
-  notificationTime: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textTertiary,
-  },
-  notificationMessage: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  notificationBadge: {
-    marginTop: SPACING.xs,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary + '12',
-    ...TYPOGRAPHY.caption,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  notificationTypePill: {
-    marginTop: SPACING.xs,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  notificationTypeText: {
-    ...TYPOGRAPHY.caption,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
-  },
-  markAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 999,
-    backgroundColor: COLORS.surface,
-  },
-  markAllBtnText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  expandHintText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.primary,
-    marginTop: SPACING.sm,
-    textAlign: 'right',
-  },
-  deleteBtn: {
-    padding: 8,
-  },
-  expandHintText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
-    textAlign: 'right',
-  },
-  notificationData: {
-    marginTop: SPACING.sm,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.primary + '08',
-    borderRadius: 14,
-  },
-  notificationDataRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
-  },
-  notificationDataKey: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginRight: SPACING.sm,
-  },
-  notificationDataValue: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textPrimary,
-    flex: 1,
-    textAlign: 'right',
-  },
-
-  // Empty State
+  // Empty
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    gap: SPACING.md,
   },
+
   emptyIconWrapper: {
     width: 80,
     height: 80,
@@ -560,21 +610,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
   },
+
   emptyTitle: {
     ...TYPOGRAPHY.h4,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
   },
-  emptyText: {
+
+  emptySubtitle: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
   },
 })
