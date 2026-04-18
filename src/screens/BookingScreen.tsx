@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -17,6 +18,7 @@ import { useBookings } from '../hooks/useBookings'
 import { useNotifications } from '../hooks/useNotifications'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
+import { supabase } from '../services/supabase'
 import Toast from '../components/Toast'
 import OfflineBanner from '../components/OfflineBanner'
 
@@ -26,6 +28,8 @@ export default function BookingScreen() {
   const { createBooking, reservePendingBookings, finalizePendingBookings, releasePendingBookings, loading } = useBookings()
   const { createNotification } = useNotifications(authUser?.id)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
+  const [selectedDropoffOption, setSelectedDropoffOption] = useState<'final' | 'custom'>('final')
+  const [customDropoffPoint, setCustomDropoffPoint] = useState('')
   const [pendingBookingIds, setPendingBookingIds] = useState<string[]>(bookingData?.pending_booking_ids ?? [])
   const [bookingFinalized, setBookingFinalized] = useState(false)
   const [toastVisible, setToastVisible] = useState(false)
@@ -79,6 +83,15 @@ export default function BookingScreen() {
   const serviceFee = Math.round(total_price * 0.15) // 15% de fee
   const finalTotal = total_price + serviceFee
 
+  // Determinar punto de desembarque
+  const getDropoffPoint = () => {
+    if (selectedDropoffOption === 'final') {
+      return selectedRoute.destination
+    } else {
+      return customDropoffPoint
+    }
+  }
+
   const handleCashBooking = async () => {
     if (!authUser) {
       errorHandler.handle(
@@ -91,10 +104,43 @@ export default function BookingScreen() {
       return
     }
 
+    // Validar que haya seleccionado parada intermedia
+    if (selectedDropoffOption === 'custom' && !customDropoffPoint.trim()) {
+      errorHandler.handle(
+        'Por favor ingresa la parada de desembarque',
+        ErrorType.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        true,
+        { context: 'dropoff_required' }
+      )
+      return
+    }
+
     try {
+      const dropoffPoint = getDropoffPoint()
+      const isCustomDropoff = selectedDropoffOption === 'custom'
+
       let results
 
       if (pendingBookingIds.length > 0) {
+        // 📍 Primero actualizar dropoff_point en los bookings pending
+        console.log(`📍 Actualizando dropoff_point en ${pendingBookingIds.length} bookings antes de finalizar...`)
+        const { error: updateError } = await supabase
+          .from('bookings')
+          .update({
+            dropoff_point: dropoffPoint,
+            dropoff_point_custom: isCustomDropoff,
+          })
+          .in('id', pendingBookingIds)
+          .eq('booking_status', 'pending')
+
+        if (updateError) {
+          console.error('❌ Error actualizando dropoff_point:', updateError)
+          throw updateError
+        }
+        console.log('✅ Dropoff point actualizado en bookings')
+
+        // Ahora finalizar con la RPC (preservará los dropoff_point que acabamos de establecer)
         results = await finalizePendingBookings(pendingBookingIds, 'cash')
       } else {
         const bookingPromises = seat_numbers.map((seatNum: number) =>
@@ -105,7 +151,9 @@ export default function BookingScreen() {
             selectedRoute.price_per_seat,
             'cash',
             'confirmed',
-            'completed'
+            'completed',
+            dropoffPoint,
+            isCustomDropoff
           )
         )
         results = await Promise.all(bookingPromises)
@@ -305,6 +353,62 @@ export default function BookingScreen() {
               <Ionicons name="person" size={20} color={COLORS.textSecondary} />
               <Text style={styles.driverName}>Conductor: {selectedRoute.driver_name}</Text>
             </View>
+          )}
+        </LinearGradient>
+
+        {/* Dropoff Point Card */}
+        <LinearGradient
+          colors={['#FFFFFF', COLORS.surfaceAlt]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.dropoffCardGradient}
+        >
+          <Text style={styles.sectionTitle}>Punto de desembarque</Text>
+
+          {/* Option: Final Destination */}
+          <TouchableOpacity
+            style={[styles.dropoffOption, selectedDropoffOption === 'final' && styles.dropoffOptionActive]}
+            onPress={() => setSelectedDropoffOption('final')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.dropoffRadio, selectedDropoffOption === 'final' && styles.dropoffRadioSelected]}>
+              {selectedDropoffOption === 'final' && <View style={styles.dropoffRadioInner} />}
+            </View>
+            <View style={styles.dropoffOptionContent}>
+              <Text style={[styles.dropoffOptionLabel, selectedDropoffOption === 'final' && styles.dropoffOptionLabelActive]}>
+                Destino final
+              </Text>
+              <Text style={styles.dropoffOptionSubtitle}>{selectedRoute.destination}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Option: Custom Dropoff */}
+          <TouchableOpacity
+            style={[styles.dropoffOption, selectedDropoffOption === 'custom' && styles.dropoffOptionActive]}
+            onPress={() => setSelectedDropoffOption('custom')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.dropoffRadio, selectedDropoffOption === 'custom' && styles.dropoffRadioSelected]}>
+              {selectedDropoffOption === 'custom' && <View style={styles.dropoffRadioInner} />}
+            </View>
+            <View style={styles.dropoffOptionContent}>
+              <Text style={[styles.dropoffOptionLabel, selectedDropoffOption === 'custom' && styles.dropoffOptionLabelActive]}>
+                Parada intermedia
+              </Text>
+              <Text style={styles.dropoffOptionSubtitle}>Especifica dónde te bajan</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Custom Dropoff Input */}
+          {selectedDropoffOption === 'custom' && (
+            <TextInput
+              style={styles.dropoffInput}
+              placeholder="Ej: Centro comercial, calle 5ta, farmacia..."
+              placeholderTextColor={COLORS.textSecondary}
+              value={customDropoffPoint}
+              onChangeText={setCustomDropoffPoint}
+              editable={!loading}
+            />
           )}
         </LinearGradient>
 
@@ -906,5 +1010,77 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textInverse,
     fontWeight: '600',
+  },
+
+  // Dropoff Card
+  dropoffCardGradient: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dropoffOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.sm,
+  },
+  dropoffOptionActive: {
+    backgroundColor: COLORS.primary + '10',
+  },
+  dropoffRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+    flexShrink: 0,
+  },
+  dropoffRadioSelected: {
+    borderColor: COLORS.primary,
+  },
+  dropoffRadioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+  },
+  dropoffOptionContent: {
+    flex: 1,
+  },
+  dropoffOptionLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  dropoffOptionLabelActive: {
+    color: COLORS.primary,
+  },
+  dropoffOptionSubtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  dropoffInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    marginTop: SPACING.md,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.surface,
   },
 })

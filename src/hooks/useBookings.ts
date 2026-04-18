@@ -11,6 +11,8 @@ export interface Booking {
   payment_status: string;
   booking_status: string;
   notes?: string;
+  dropoff_point?: string;
+  dropoff_point_custom?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -26,25 +28,33 @@ export const useBookings = () => {
     price: number,
     paymentMethod: string = "cash",
     bookingStatus: "confirmed" | "pending" = "confirmed",
-    paymentStatus: string = "pending"
+    paymentStatus: string = "pending",
+    dropoffPoint?: string,
+    dropoffPointCustom?: boolean
   ) => {
     try {
       setError(null);
       setLoading(true);
 
+      const bookingData: any = {
+        route_id: routeId,
+        passenger_id: passengerId,
+        seat_number: seatNumber,
+        price,
+        payment_method: paymentMethod,
+        payment_status: paymentStatus,
+        booking_status: bookingStatus,
+      };
+
+      // Solo agregar dropoff_point si existen
+      if (dropoffPoint) {
+        bookingData.dropoff_point = dropoffPoint;
+        bookingData.dropoff_point_custom = dropoffPointCustom ?? false;
+      }
+
       const { data, error: bookingError } = await supabase
         .from("bookings")
-        .insert([
-          {
-            route_id: routeId,
-            passenger_id: passengerId,
-            seat_number: seatNumber,
-            price,
-            payment_method: paymentMethod,
-            payment_status: paymentStatus,
-            booking_status: bookingStatus,
-          },
-        ])
+        .insert([bookingData])
         .select()
         .single();
 
@@ -72,21 +82,33 @@ export const useBookings = () => {
     passengerId: string,
     seatNumbers: number[],
     price: number,
-    paymentMethod: string = 'card'
+    paymentMethod: string = 'card',
+    dropoffPoint?: string,
+    dropoffPointCustom?: boolean
   ) => {
     try {
       setError(null);
       setLoading(true);
 
-      const insertRows = seatNumbers.map((seat_number) => ({
-        route_id: routeId,
-        passenger_id: passengerId,
-        seat_number,
-        price,
-        payment_method: paymentMethod,
-        payment_status: 'pending',
-        booking_status: 'pending',
-      }));
+      const insertRows = seatNumbers.map((seat_number) => {
+        const row: any = {
+          route_id: routeId,
+          passenger_id: passengerId,
+          seat_number,
+          price,
+          payment_method: paymentMethod,
+          payment_status: 'pending',
+          booking_status: 'pending',
+        };
+        
+        // Solo agregar dropoff_point si existen
+        if (dropoffPoint) {
+          row.dropoff_point = dropoffPoint;
+          row.dropoff_point_custom = dropoffPointCustom ?? false;
+        }
+        
+        return row;
+      });
 
       const { data, error: bookingError } = await supabase
         .from('bookings')
@@ -120,53 +142,49 @@ export const useBookings = () => {
       setError(null);
       setLoading(true);
 
+      console.log(`🔄 Finalizando ${bookingIds.length} bookings con método: ${paymentMethod}`);
+
+      // ✅ USANDO FUNCIÓN RPC ATÓMICA (previene race conditions)
+      // La RPC preserva automáticamente dropoff_point y dropoff_point_custom
       const { data, error } = await supabase
-        .from('bookings')
-        .update({ booking_status: 'confirmed', payment_status: paymentMethod, payment_method: paymentMethod })
-        .in('id', bookingIds)
-        .eq('booking_status', 'pending')
-        .select();
+        .rpc('finalize_bookings_atomic', {
+          p_booking_ids: bookingIds,
+          p_payment_method: paymentMethod,
+        });
 
-      if (error) throw error;
-
-      // Contar cuántos asientos se confirmaron y actualizar available_seats
-      if (data && data.length > 0) {
-        const routeId = data[0].route_id;
-        const seatsConfirmed = data.length;
-
-        try {
-          // Obtener el valor actual de available_seats
-          const { data: routeData, error: fetchError } = await supabase
-            .from('routes')
-            .select('available_seats')
-            .eq('id', routeId)
-            .single();
-
-          if (fetchError) throw fetchError;
-
-          if (routeData) {
-            // Calcular nuevos asientos disponibles
-            const newAvailableSeats = Math.max(0, routeData.available_seats - seatsConfirmed);
-            
-            // Actualizar la tabla routes
-            const { error: updateError } = await supabase
-              .from('routes')
-              .update({ available_seats: newAvailableSeats })
-              .eq('id', routeId);
-
-            if (updateError) {
-              console.warn('Error actualizando available_seats:', updateError);
-            }
-          }
-        } catch (err) {
-          console.warn('Error en actualización de available_seats:', err);
-          // No lanzar error aquí, la reserva ya se confirmó
-        }
+      if (error) {
+        console.error('❌ RPC Error:', error);
+        throw error;
       }
 
-      return (data as Booking[]) || [];
+      console.log('✅ RPC Response:', data);
+
+      // La RPC retorna un array con 1 objeto con estructura: 
+      // { success, message, updated_bookings_count, remaining_seats }
+      const result = data?.[0];
+
+      if (!result?.success) {
+        const errorMsg = result?.message || 'Error confirmando bookings';
+        console.error(`❌ RPC returned failure: ${errorMsg}`);
+        const customError = new Error(errorMsg);
+        (customError as any).code = 'BOOKING_FAILED';
+        throw customError;
+      }
+
+      console.log(`✅ ${result.updated_bookings_count} bookings confirmados`);
+      console.log(`📊 Asientos restantes: ${result.remaining_seats}`);
+
+      // Retornar formato compatible con el resto del código
+      return {
+        success: result.success,
+        message: result.message,
+        updated_bookings_count: result.updated_bookings_count,
+        remaining_seats: result.remaining_seats,
+      };
     } catch (err: any) {
       const message = err.message || 'Error confirmando reserva';
+      console.error(`❌ finalizePendingBookings Error: ${message}`);
+      console.error('Full error:', err);
       setError(message);
       throw err;
     } finally {
@@ -179,6 +197,8 @@ export const useBookings = () => {
       setError(null);
       setLoading(true);
 
+      // ✅ Solo cambiar status a cancelled
+      // ✅ El TRIGGER de DB recalculará automáticamente available_seats
       const { data, error } = await supabase
         .from('bookings')
         .update({ booking_status: 'cancelled', payment_status: 'expired' })
@@ -187,25 +207,6 @@ export const useBookings = () => {
         .select('id');
 
       if (error) throw error;
-
-      const releasedCount = (data as any[]).length || 0;
-
-      // Incrementar available_seats cuando se liberan reservas
-      if (releasedCount > 0) {
-        const { data: routeData } = await supabase
-          .from('routes')
-          .select('available_seats, total_seats')
-          .eq('id', routeId)
-          .single();
-
-        if (routeData) {
-          const newAvailableSeats = Math.min(routeData.total_seats, routeData.available_seats + releasedCount);
-          await supabase
-            .from('routes')
-            .update({ available_seats: newAvailableSeats })
-            .eq('id', routeId);
-        }
-      }
 
       return data;
     } catch (err: any) {
@@ -306,17 +307,8 @@ export const useBookings = () => {
       setError(null);
       setLoading(true);
 
-      // First, get the booking details BEFORE cancelling
-      const { data: bookingData, error: fetchError } = await supabase
-        .from("bookings")
-        .select("id, route_id")
-        .eq("id", bookingId)
-        .single();
-
-      if (fetchError) throw new Error("Reserva no encontrada");
-      if (!bookingData) throw new Error("Reserva no existe");
-
-      // Update booking status
+      // ✅ Solo cambiar status a cancelled
+      // ✅ El TRIGGER de DB recalculará automáticamente available_seats
       const { error: updateError } = await supabase
         .from("bookings")
         .update({ booking_status: "cancelled", payment_status: "refunded" })
@@ -324,24 +316,7 @@ export const useBookings = () => {
 
       if (updateError) throw updateError;
 
-      // Incrementar available_seats cuando se cancela una reserva confirmada
-      if (bookingData.route_id) {
-        const { data: routeData } = await supabase
-          .from('routes')
-          .select('available_seats, total_seats')
-          .eq('id', bookingData.route_id)
-          .single();
-
-        if (routeData) {
-          const newAvailableSeats = Math.min(routeData.total_seats, routeData.available_seats + 1);
-          await supabase
-            .from('routes')
-            .update({ available_seats: newAvailableSeats })
-            .eq('id', bookingData.route_id);
-        }
-      }
-
-      return bookingData;
+      return { id: bookingId };
     } catch (err: any) {
       const message = err.message || "Error cancelling booking";
       setError(message);

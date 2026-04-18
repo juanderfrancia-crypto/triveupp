@@ -80,9 +80,16 @@ CREATE POLICY "Drivers can delete own routes" ON public.routes
 DROP POLICY IF EXISTS "Passengers see own bookings" ON public.bookings;
 CREATE POLICY "Passengers see own bookings" ON public.bookings
   FOR SELECT
+  USING (auth.uid() = passenger_id);
+
+-- Policy: Drivers see bookings for their own routes
+DROP POLICY IF EXISTS "Drivers see bookings for own routes" ON public.bookings;
+CREATE POLICY "Drivers see bookings for own routes" ON public.bookings
+  FOR SELECT
   USING (
-    auth.uid() = passenger_id 
-    OR auth.uid() = (SELECT driver_id FROM routes WHERE id = route_id)
+    route_id IN (
+      SELECT id FROM routes WHERE driver_id = auth.uid()
+    )
   );
 
 -- Policy: Passengers create their own bookings

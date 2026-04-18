@@ -34,14 +34,16 @@ export default function ProfileScreen() {
   }, [profile?.role])
 
   const loadVehiclePhoto = async () => {
-    if (!user?.id) return
+    if (!user?.id || !isDriver) return
     const photoUrl = await getVehiclePhotoUrl(user.id)
     setVehiclePhotoUrl(photoUrl)
   }
 
   useEffect(() => {
-    loadVehiclePhoto()
-  }, [user?.id])
+    if (isDriver) {
+      loadVehiclePhoto()
+    }
+  }, [user?.id, isDriver])
 
   // Ejecutar logout cuando shouldLogout sea true
   useEffect(() => {

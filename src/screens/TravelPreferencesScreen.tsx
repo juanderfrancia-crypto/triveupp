@@ -29,6 +29,7 @@ export default function TravelPreferencesScreen() {
   const [saving, setSaving] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastVisible, setToastVisible] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   // Preferences State
   const [smokingAllowed, setSmokingAllowed] = useState(false)
@@ -45,13 +46,16 @@ export default function TravelPreferencesScreen() {
   }, [navigation])
 
   useEffect(() => {
-    if (!authUser?.id) return
+    if (!authUser?.id || hasLoaded) return
+    
     loadPreferences()
-  }, [authUser?.id])
+  }, [authUser?.id, hasLoaded])
 
   const loadPreferences = async () => {
     try {
       setLoading(true)
+      setHasLoaded(true) // Prevenir recargas múltiples
+      
       const prefs = await travelPreferences.getUserTravelPreferences(authUser!.id)
       if (prefs) {
         setSmokingAllowed(prefs.smoking_allowed || false)

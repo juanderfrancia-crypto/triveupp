@@ -24,11 +24,8 @@ async function getStorageUrl(
     const allowPublicUrl = options?.allowPublicUrl ?? PUBLIC_BUCKETS.has(bucket)
 
     if (!allowPublicUrl) {
-      console.error('No se pudo generar signed URL y el bucket no permite URL pública:', error)
       throw error || new Error('No se pudo generar la URL de storage')
     }
-
-    console.warn('Signed URL unavailable, falling back to public URL:', error)
 
     const { data: publicData, error: publicError } = await supabase.storage
       .from(bucket)
@@ -38,13 +35,8 @@ async function getStorageUrl(
       return publicData.publicUrl
     }
 
-    if (publicError) {
-      console.error('Public URL unavailable:', publicError)
-    }
-
     throw error || publicError || new Error('No se pudo generar la URL de storage')
   } catch (err) {
-    console.error('Error getting storage URL:', err)
     throw err
   }
 }

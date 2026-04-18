@@ -287,27 +287,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Apariencia */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Apariencia</Text>
-        
-        <TouchableOpacity 
-          style={styles.settingCard}
-          onPress={() => navigation.navigate('TripPreferences' as never)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingHeader}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="car-outline" size={20} color={COLORS.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Mi Experiencia de Viaje</Text>
-              <Text style={styles.settingDescription}>Personaliza tus preferencias</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
-          </View>
-        </TouchableOpacity>
-      </View>
+
 
       {/* Viaje Personalizado */}
       <View style={styles.section}>
@@ -354,7 +334,7 @@ export default function SettingsScreen() {
         >
           <View style={styles.settingHeader}>
             <View style={styles.settingIcon}>
-              <Ionicons name="history-outline" size={20} color={COLORS.primary} />
+              <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Historial de Cancelaciones</Text>

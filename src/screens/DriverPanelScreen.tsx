@@ -28,6 +28,8 @@ interface Passenger {
   seat_number: number
   booking_status: string
   created_at: string
+  dropoff_point?: string
+  dropoff_point_custom?: boolean
 }
 
 interface DriverRoute {
@@ -73,21 +75,37 @@ export default function DriverPanelScreen() {
 
       const routesWithPassengers = await Promise.all(
         (data || []).map(async (route) => {
-          const { data: bookings } = await supabase
+          const { data: bookings, error: bookingsError } = await supabase
             .from('bookings')
-            .select('*, passenger:profiles(*)')
+            .select(`
+              id,
+              passenger_id,
+              seat_number,
+              booking_status,
+              created_at,
+              dropoff_point,
+              dropoff_point_custom,
+              profiles:passenger_id(id, name, email, phone)
+            `)
             .eq('route_id', route.id)
             .eq('booking_status', 'confirmed')
+            .order('seat_number', { ascending: true })
+
+          if (bookingsError) {
+            console.error('Error loading bookings:', bookingsError)
+          }
 
           const passengers: Passenger[] = (bookings || []).map((b: any) => ({
             booking_id: b.id,
             passenger_id: b.passenger_id,
-            name: b.passenger?.name || 'Pasajero',
-            email: b.passenger?.email || '',
-            phone: b.passenger?.phone || '',
+            name: b.profiles?.name || 'Pasajero',
+            email: b.profiles?.email || '',
+            phone: b.profiles?.phone || '',
             seat_number: b.seat_number,
             booking_status: b.booking_status,
             created_at: b.created_at,
+            dropoff_point: b.dropoff_point || route.destination,
+            dropoff_point_custom: b.dropoff_point_custom || false,
           }))
 
           return { ...route, passengers }
@@ -96,6 +114,7 @@ export default function DriverPanelScreen() {
 
       setRoutes(routesWithPassengers)
     } catch (err: any) {
+      console.error('Error fetching routes:', err)
       Alert.alert('Error', 'No se pudieron cargar tus rutas')
     } finally {
       setLoading(false)
@@ -112,10 +131,11 @@ export default function DriverPanelScreen() {
     useCallback(() => {
       fetchDriverRoutes()
       
-      // Configurar polling cada 3 segundos
+      // ✅ Polling inteligente: 2 segundos en lugar de 1 para reducir carga DB
+      // El TRIGGER en DB recalcula available_seats automáticamente
       pollingIntervalRef.current = setInterval(() => {
         fetchDriverRoutes()
-      }, 3000)
+      }, 2000)
 
       return () => {
         if (pollingIntervalRef.current) {
@@ -172,12 +192,20 @@ export default function DriverPanelScreen() {
   const updateRouteStatus = async (routeId: string, newStatus: string) => {
     try {
       setUpdatingRouteId(routeId)
+      
       const { error } = await supabase
         .from('routes')
         .update({ status: newStatus })
         .eq('id', routeId)
 
       if (error) throw error
+
+      // Actualizar estado local inmediatamente para que no desaparezcan los pasajeros
+      setRoutes((prevRoutes) =>
+        prevRoutes.map((route) =>
+          route.id === routeId ? { ...route, status: newStatus as any } : route
+        )
+      )
 
       if (newStatus === 'in_progress') {
         const route = routes.find((routeItem) => routeItem.id === routeId)
@@ -195,7 +223,10 @@ export default function DriverPanelScreen() {
           : 'Viaje cancelado.'
       )
 
-      fetchDriverRoutes()
+      // Refetch en background para sincronizar
+      setTimeout(() => {
+        fetchDriverRoutes()
+      }, 1000)
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo actualizar el estado')
     } finally {
@@ -252,6 +283,31 @@ export default function DriverPanelScreen() {
       default:
         return { label: status, color: COLORS.textSecondary, icon: 'help-circle-outline' }
     }
+  }
+
+  // 📍 Agrupar pasajeros por parada de desembarque
+  const groupPassengersByDropoff = (passengers: Passenger[]) => {
+    const grouped: { [key: string]: { passengers: Passenger[]; count: number; isCustom: boolean } } = {}
+
+    passengers.forEach((passenger) => {
+      const dropoff = passenger.dropoff_point || 'Destino final'
+      if (!grouped[dropoff]) {
+        grouped[dropoff] = {
+          passengers: [],
+          count: 0,
+          isCustom: passenger.dropoff_point_custom || false,
+        }
+      }
+      grouped[dropoff].passengers.push(passenger)
+      grouped[dropoff].count += 1
+    })
+
+    return Object.entries(grouped)
+      .map(([dropoff, data]) => ({
+        dropoff,
+        ...data,
+      }))
+      .sort((a, b) => b.count - a.count)
   }
 
   if (loading) {
@@ -399,25 +455,49 @@ export default function DriverPanelScreen() {
                   )}
                 </View>
 
-                {/* Passengers List */}
+                {/* Passengers List - Grouped by Dropoff Point */}
                 {route.passengers && route.passengers.length > 0 && (
                   <View style={styles.passengersSection}>
-                    <Text style={styles.passengersTitle}>Pasajeros</Text>
-                    {route.passengers.map((passenger, index) => (
-                      <View key={passenger.booking_id} style={styles.passengerItem}>
-                        <View style={styles.passengerAvatar}>
-                          <Text style={styles.passengerInitials}>
-                            {passenger.name.charAt(0).toUpperCase()}
-                          </Text>
+                    <Text style={styles.passengersTitle}>Paradas de desembarque</Text>
+                    {groupPassengersByDropoff(route.passengers).map((dropoffGroup, idx) => (
+                      <View key={idx} style={styles.dropoffGroupItem}>
+                        <View style={styles.dropoffHeader}>
+                          <View style={styles.dropoffIconContainer}>
+                            <Ionicons
+                              name={dropoffGroup.isCustom ? 'flag' : 'pin'}
+                              size={16}
+                              color={COLORS.primary}
+                            />
+                          </View>
+                          <View style={styles.dropoffInfo}>
+                            <Text style={styles.dropoffLocation}>{dropoffGroup.dropoff}</Text>
+                            <Text style={styles.dropoffCount}>{dropoffGroup.count} pasajero{dropoffGroup.count !== 1 ? 's' : ''}</Text>
+                          </View>
+                          {dropoffGroup.isCustom && (
+                            <View style={styles.customBadge}>
+                              <Text style={styles.customBadgeText}>Custom</Text>
+                            </View>
+                          )}
                         </View>
-                        <View style={styles.passengerInfo}>
-                          <Text style={styles.passengerName}>{passenger.name}</Text>
-                          <Text style={styles.passengerSeat}>
-                            Asiento {passenger.seat_number}
-                          </Text>
-                        </View>
-                        <View style={styles.confirmedBadge}>
-                          <Ionicons name="checkmark" size={12} color={COLORS.success} />
+                        <View style={styles.passengersInGroup}>
+                          {dropoffGroup.passengers.map((passenger) => (
+                            <View key={passenger.booking_id} style={styles.passengerItem}>
+                              <View style={styles.passengerAvatar}>
+                                <Text style={styles.passengerInitials}>
+                                  {passenger.name.charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                              <View style={styles.passengerInfo}>
+                                <Text style={styles.passengerName}>{passenger.name}</Text>
+                                <Text style={styles.passengerSeat}>
+                                  Asiento {passenger.seat_number}
+                                </Text>
+                              </View>
+                              <View style={styles.confirmedBadge}>
+                                <Ionicons name="checkmark" size={12} color={COLORS.success} />
+                              </View>
+                            </View>
+                          ))}
                         </View>
                       </View>
                     ))}
@@ -874,5 +954,61 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.warning,
     flex: 1,
+  },
+
+  // 📍 Dropoff Groups
+  dropoffGroupItem: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    overflow: 'hidden',
+  },
+  dropoffHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.primary + '10',
+  },
+  dropoffIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  dropoffInfo: {
+    flex: 1,
+  },
+  dropoffLocation: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  dropoffCount: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  customBadge: {
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.sm,
+  },
+  customBadgeText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textInverse,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  passengersInGroup: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.surface,
   },
 })

@@ -1,19 +1,19 @@
 // 📊 ANALYTICS Y CRASH REPORTING SERVICE
 // Inicializa Sentry para reportar crashes y errores
 
-// ⚠️ Sentry import comentado temporalmente para evitar crash en Metro
+// ⚠️ Sentry DESHABILITADO TEMPORALMENTE - Causa error en Metro
 // import * as Sentry from 'sentry-expo';
 
-// 🔑 CONFIG: Reemplaza YOUR_SENTRY_DSN con tu DSN real
-// Ve a sentry.io → Create Project → Copias el DSN → Lo pegas aquí
+// 🔑 CONFIG: DSN configurado
 const SENTRY_DSN = 'https://390d5c619ef05bdf2e77fa8a2cbcfae2@o4511237159583744.ingest.us.sentry.io/4511237198708736';
 
 /**
  * Inicializa Sentry para crash reporting
- * ⚠️ DESHABILITADO TEMPORALMENTE - Causa crash en Metro
+ * ⚠️ DESHABILITADO TEMPORALMENTE
  */
 export const initSentryAnalytics = () => {
-  console.log('ℹ️ Sentry analytics deshabilitado temporalmente');
+  console.log('ℹ️ Sentry analytics deshabilitado temporalmente (Metro issue)');
+  // TODO: Reactivar cuando resolvamos incompatibilidad con Expo
   return;
 };
 
@@ -23,6 +23,7 @@ export const initSentryAnalytics = () => {
  */
 export const reportError = (error: Error, context?: Record<string, any>) => {
   console.error('Error:', error, context);
+  // TODO: Reactivar Sentry
   return;
 };
 

@@ -85,14 +85,20 @@ BEGIN
       booking_status = 'confirmed',
       payment_status = p_payment_method,
       payment_method = p_payment_method,
+      dropoff_point = dropoff_point,
+      dropoff_point_custom = dropoff_point_custom,
       updated_at = NOW()
     WHERE id = ANY(p_booking_ids);
 
-    -- 7️⃣ ACTUALIZAR available_seats DESPUÉS de confirmar
+    -- 7️⃣ RECALCULAR available_seats basado en confirmed bookings (NO decrementar)
+    -- Esto previene race conditions cuando múltiples usuarios confirman simultáneamente
     UPDATE routes 
     SET 
-      available_seats = available_seats - v_count,
-      occupied_seats = occupied_seats + v_count,
+      available_seats = total_seats - (
+        SELECT COUNT(*) FROM bookings 
+        WHERE route_id = v_route_id 
+        AND booking_status = 'confirmed'
+      ),
       updated_at = NOW()
     WHERE id = v_route_id;
 

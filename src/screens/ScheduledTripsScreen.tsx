@@ -38,6 +38,8 @@ export default function ScheduledTripsScreen() {
             routeId: route.id,
             origin: route.origin || 'Origen desconocido',
             destination: route.destination || 'Destino desconocido',
+            dropoffPoint: booking.dropoff_point || route.destination || 'Destino desconocido',
+            dropoffPointCustom: booking.dropoff_point_custom || false,
             date: route.departure_time ? new Date(route.departure_time).toISOString().split('T')[0] : '',
             time: route.departure_time 
               ? new Date(route.departure_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
@@ -296,6 +298,23 @@ export default function ScheduledTripsScreen() {
                         <Text style={styles.gridLabel}>Vehículo</Text>
                         <Text style={styles.gridValue}>{selectedTrip.totalSeats} cupos</Text>
                       </View>
+                    </View>
+                  </View>
+
+                  {/* Dropoff Point Card */}
+                  <View style={styles.dropoffCardTrip}>
+                    <View style={styles.dropoffHeaderTrip}>
+                      <Ionicons name="location-outline" size={24} color={COLORS.primary} />
+                      <Text style={styles.dropoffTitleTrip}>Parada de desembarque</Text>
+                    </View>
+                    <View style={styles.dropoffContentTrip}>
+                      <Text style={styles.dropoffLocationTrip}>{selectedTrip.dropoffPoint}</Text>
+                      {selectedTrip.dropoffPointCustom && (
+                        <View style={styles.customDropoffBadge}>
+                          <Ionicons name="flag-outline" size={14} color={COLORS.accent} />
+                          <Text style={styles.customDropoffText}>Parada intermedia</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -1209,5 +1228,52 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.error,
     fontWeight: '700',
+  },
+
+  // Dropoff Card
+  dropoffCardTrip: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surface,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    ...SHADOWS.sm,
+  },
+  dropoffHeaderTrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  dropoffTitleTrip: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  dropoffContentTrip: {
+    gap: SPACING.sm,
+  },
+  dropoffLocationTrip: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  customDropoffBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.accent + '15',
+    alignSelf: 'flex-start',
+  },
+  customDropoffText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.accent,
+    fontWeight: '600',
   },
 })
