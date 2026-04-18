@@ -220,7 +220,8 @@ export default function ActiveTripsScreen() {
     navigation.navigate('TripStatus', { routeId: trip.id, bookingId: trip.bookingId })
   }
 
-  const TripCard = ({ trip }: { trip: ActiveTrip }) => (
+  const TripCard = ({ trip }: { trip: ActiveTrip }) => {
+    return (
     <View style={styles.tripCard}>
       {/* Encabezado con estado */}
       <View style={styles.cardHeader}>
@@ -333,7 +334,8 @@ export default function ActiveTripsScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  )
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
