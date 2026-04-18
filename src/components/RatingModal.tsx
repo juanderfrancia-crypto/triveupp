@@ -8,8 +8,11 @@ interface RatingModalProps {
   visible: boolean
   userName: string
   onClose: () => void
-  onSubmit: (rating: number, comment: string) => Promise<void>
+  onSubmit: (rating: number, comment: string, recommend: boolean) => Promise<void>
   isDriver?: boolean
+  initialRating?: number
+  initialComment?: string
+  initialRecommend?: boolean
 }
 
 export default function RatingModal({
@@ -18,9 +21,13 @@ export default function RatingModal({
   onClose,
   onSubmit,
   isDriver = false,
+  initialRating = 0,
+  initialComment = '',
+  initialRecommend = false,
 }: RatingModalProps) {
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState('')
+  const [rating, setRating] = useState(initialRating)
+  const [comment, setComment] = useState(initialComment)
+  const [recommend, setRecommend] = useState(initialRecommend)
   const [loading, setLoading] = useState(false)
   const [toastConfig, setToastConfig] = useState({
     visible: false,
@@ -40,7 +47,7 @@ export default function RatingModal({
 
     try {
       setLoading(true)
-      await onSubmit(rating, comment)
+      await onSubmit(rating, comment, recommend)
       
       setToastConfig({
         visible: true,
@@ -51,6 +58,7 @@ export default function RatingModal({
       // Reiniciar formulario
       setRating(0)
       setComment('')
+      setRecommend(false)
       
       // Cerrar modal después de 1 segundo
       setTimeout(() => {
@@ -136,6 +144,58 @@ export default function RatingModal({
                 numberOfLines={3}
                 editable={!loading}
               />
+            </View>
+
+            {/* Recommendation Toggle */}
+            <View style={styles.recommendSection}>
+              <Text style={styles.recommendLabel}>¿Lo recomendarías?</Text>
+              <View style={styles.toggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    !recommend && styles.toggleButtonActiveNo,
+                  ]}
+                  onPress={() => setRecommend(false)}
+                  disabled={loading}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={!recommend ? 'white' : '#999'}
+                  />
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      !recommend && styles.toggleButtonTextActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    recommend && styles.toggleButtonActiveYes,
+                  ]}
+                  onPress={() => setRecommend(true)}
+                  disabled={loading}
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={recommend ? 'white' : '#999'}
+                  />
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      recommend && styles.toggleButtonTextActive,
+                    ]}
+                  >
+                    Sí
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Action Buttons */}
@@ -262,6 +322,52 @@ const styles = StyleSheet.create({
     minHeight: 80,
     color: COLORS.textPrimary,
     textAlignVertical: 'top',
+  },
+  recommendSection: {
+    marginBottom: SPACING.lg,
+  },
+  recommendLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+    fontWeight: '600',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    justifyContent: 'center',
+  },
+  toggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    backgroundColor: '#fafafa',
+  },
+  toggleButtonActive: {
+    borderWidth: 0,
+  },
+  toggleButtonActiveNo: {
+    backgroundColor: '#ef4444',
+    borderWidth: 0,
+  },
+  toggleButtonActiveYes: {
+    backgroundColor: '#10b981',
+    borderWidth: 0,
+  },
+  toggleButtonText: {
+    ...TYPOGRAPHY.body,
+    color: '#999',
+    fontWeight: '600',
+  },
+  toggleButtonTextActive: {
+    color: 'white',
   },
   buttonContainer: {
     flexDirection: 'row',

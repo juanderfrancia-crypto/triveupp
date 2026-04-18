@@ -7,6 +7,7 @@ export interface Review {
   reviewee_id: string
   rating: number
   comment?: string
+  recommend?: boolean
   created_at: string
 }
 
@@ -16,7 +17,8 @@ export const createReview = async (
   reviewerId: string,
   revieweeId: string,
   rating: number,
-  comment?: string
+  comment?: string,
+  recommend?: boolean
 ): Promise<Review | null> => {
   try {
     const { data, error } = await supabase
@@ -27,6 +29,7 @@ export const createReview = async (
         reviewee_id: revieweeId,
         rating,
         comment: comment || null,
+        recommend: recommend ?? false,
       })
       .select()
       .single()

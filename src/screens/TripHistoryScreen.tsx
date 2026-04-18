@@ -127,7 +127,7 @@ export default function TripHistoryScreen() {
     setRatingModalVisible(true)
   }
 
-  const handleRatingSubmit = async (rating: number, comment: string) => {
+  const handleRatingSubmit = async (rating: number, comment: string, recommend: boolean) => {
     if (!selectedTrip || !user) return
     if (!selectedTrip.driver_id) {
       setToastConfig({
@@ -161,13 +161,14 @@ export default function TripHistoryScreen() {
         user.id,
         selectedTrip.driver_id,
         rating,
-        comment || undefined
+        comment || undefined,
+        recommend
       )
 
       if (success) {
         setToastConfig({
           visible: true,
-          message: `✓ Viaje calificado con ${rating} estrellas`,
+          message: `✓ Viaje calificado con ${rating} estrellas${recommend ? ' - ¡Recomendado!' : ''}`,
           type: 'success',
         })
 
