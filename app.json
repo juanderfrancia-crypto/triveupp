@@ -19,9 +19,11 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "com.traive.triveapp"
+      "package": "com.traive.triveapp",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,12 +31,14 @@
     "description": "Trive es la app de viajes compartidos para conductores y pasajeros en Colombia. Reserva rutas, chatea con usuarios, gestiona viajes y accede a métricas en tiempo real.",
     "plugins": [
       "expo-web-browser",
+      "expo-notifications",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Trive necesita tu ubicación para mostrar el progreso del viaje"
         }
-      ]
+      ],
+      "sentry-expo"
     ],
     "extra": {
       "eas": {

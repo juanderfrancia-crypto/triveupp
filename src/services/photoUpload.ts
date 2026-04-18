@@ -158,9 +158,18 @@ export async function uploadProfilePhoto(userId: string, fileUri: string): Promi
  * @param fileUri - Local URI of the image file
  */
 export async function getVehiclePhotoUrl(driverId: string): Promise<string | null> {
-  const candidatePaths = [`drivers/${driverId}/vehicle.jpg`, `${driverId}/vehicle.jpg`]
+  // Try paths in order of likelihood (simplest first)
+  const candidatePaths = [
+    `vehicle_${driverId}.jpg`,
+    `${driverId}/vehicle.jpg`,
+    `drivers/${driverId}/vehicle.jpg`,
+    `drivers/${driverId}/routes/*/vehicle.jpg` // This won't work as a direct path
+  ]
 
   for (const filePath of candidatePaths) {
+    // Skip wildcard paths - they won't work with getStorageUrl
+    if (filePath.includes('*')) continue
+    
     try {
       const url = await getStorageUrl('vehicle-photos', filePath, { allowPublicUrl: false })
       if (url) return url
@@ -189,16 +198,24 @@ export async function uploadVehiclePhoto(
     // Read file as Uint8Array using fetch (cross-platform compatible)
     const bytes = await uriToUint8Array(fileUri)
 
-    // Create candidate file paths
+    // Create candidate file paths - try simpler paths first
     const basePaths = routeId
-      ? [`drivers/${driverId}/routes/${routeId}`, `drivers/${driverId}`, `${driverId}/routes/${routeId}`, `${driverId}`]
-      : [`drivers/${driverId}`, `${driverId}`]
+      ? [
+          `vehicle_${driverId}.jpg`, // Simplest: no folder structure
+          `${driverId}/vehicle.jpg`, // Driver ID only
+          `drivers/${driverId}/vehicle.jpg`, // Standard structure
+          `drivers/${driverId}/routes/${routeId}/vehicle.jpg`, // Full structure
+        ]
+      : [
+          `vehicle_${driverId}.jpg`, // Simplest
+          `${driverId}/vehicle.jpg`, // Driver ID only
+          `drivers/${driverId}/vehicle.jpg`, // Standard structure
+        ]
 
     let uploadedFilePath: string | null = null
     let uploadError: any = null
 
-    for (const basePath of basePaths) {
-      const candidatePath = `${basePath}/vehicle.jpg`
+    for (const candidatePath of basePaths) {
       const { error } = await supabase.storage
         .from('vehicle-photos')
         .upload(candidatePath, bytes, {

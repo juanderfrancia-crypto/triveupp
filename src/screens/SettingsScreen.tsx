@@ -309,6 +309,62 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Viaje Personalizado */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Viaje Personalizado</Text>
+        
+        <TouchableOpacity 
+          style={styles.settingCard}
+          onPress={() => navigation.navigate('TravelPreferences' as never)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingHeader}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Preferencias de Viaje</Text>
+              <Text style={styles.settingDescription}>Música, aire acondicionado, smoking</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingCard}
+          onPress={() => navigation.navigate('FavoriteRoutes' as never)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingHeader}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="star-outline" size={20} color={COLORS.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Rutas Favoritas</Text>
+              <Text style={styles.settingDescription}>Tus rutas guardadas</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingCard}
+          onPress={() => navigation.navigate('CancellationHistory' as never)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingHeader}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="history-outline" size={20} color={COLORS.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Historial de Cancelaciones</Text>
+              <Text style={styles.settingDescription}>Tus cancelaciones y reembolsos</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
       {/* Información */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Información</Text>

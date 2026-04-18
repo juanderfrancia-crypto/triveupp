@@ -8,6 +8,7 @@
 -- Ejecuta esto en SQL Editor:
 
 -- Permitir cualquier persona a acceder a las fotos (GET/HEAD)
+DROP POLICY IF EXISTS "public-read-vehicle-photos" ON storage.objects;
 CREATE POLICY "public-read-vehicle-photos" ON storage.objects
   FOR SELECT USING (bucket_id = 'vehicle-photos');
 
