@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { useNavigation } from '@react-navigation/native'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../services/supabase'
 import { COLORS, SPACING, TYPOGRAPHY } from '../theme/theme'
@@ -28,6 +29,7 @@ interface PaymentMethod {
 
 export default function PaymentMethodsScreen() {
   const { user } = useAuth()
+  const navigation = useNavigation()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -203,6 +205,9 @@ export default function PaymentMethodsScreen() {
       backgroundColor: COLORS.background,
     },
     header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       padding: SPACING.lg,
       borderBottomWidth: 1,
       borderBottomColor: COLORS.border,
@@ -212,17 +217,18 @@ export default function PaymentMethodsScreen() {
       fontSize: TYPOGRAPHY.size.lg,
       fontWeight: TYPOGRAPHY.weight.bold,
       color: COLORS.textPrimary,
+      flex: 1,
+      textAlign: 'center',
     },
     addBtn: {
-      marginTop: SPACING.md,
       backgroundColor: COLORS.primary,
-      paddingVertical: SPACING.md,
-      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
       borderRadius: 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: SPACING.sm,
+      gap: SPACING.xs,
     },
     addBtnText: {
       color: COLORS.textInverse,
@@ -441,6 +447,9 @@ export default function PaymentMethodsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={28} color={COLORS.textPrimary} />
+        </TouchableOpacity>
         <Text style={styles.title}>💳 Métodos de Pago</Text>
         <TouchableOpacity
           style={styles.addBtn}
