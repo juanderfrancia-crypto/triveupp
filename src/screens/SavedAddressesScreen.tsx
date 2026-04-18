@@ -31,6 +31,7 @@ export default function SavedAddressesScreen() {
   const { user } = useAuth()
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadedOnce, setLoadedOnce] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [label, setLabel] = useState('')
@@ -40,24 +41,29 @@ export default function SavedAddressesScreen() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    loadAddresses()
-  }, [])
+    if (user?.id && !loadedOnce) {
+      loadAddresses()
+    } else if (!user?.id) {
+      setLoading(false)
+    }
+  }, [user?.id, loadedOnce])
 
   const loadAddresses = async () => {
-    if (!user?.id) return
-    
     try {
+      setLoading(true)
       const { data, error } = await supabase
         .from('saved_addresses')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
 
       if (error) throw error
       setAddresses(data || [])
+      setLoadedOnce(true)
     } catch (err) {
       console.error('Error loading addresses:', err)
       Alert.alert('Error', 'No se pueden cargar las direcciones')
+      setLoading(false)
     } finally {
       setLoading(false)
     }
@@ -88,9 +94,24 @@ export default function SavedAddressesScreen() {
           .eq('user_id', user.id)
 
         if (error) throw error
+
+        // Optimistic update
+        setAddresses(
+          addresses.map((addr) =>
+            addr.id === editingId
+              ? {
+                  ...addr,
+                  label,
+                  address,
+                  is_home: isHome,
+                  is_work: isWork,
+                }
+              : addr
+          )
+        )
       } else {
         // Create
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('saved_addresses')
           .insert({
             user_id: user.id,
@@ -99,8 +120,15 @@ export default function SavedAddressesScreen() {
             is_home: isHome,
             is_work: isWork,
           })
+          .select()
+          .single()
 
         if (error) throw error
+
+        // Optimistic update - prepend new address
+        if (data) {
+          setAddresses([data, ...addresses])
+        }
       }
 
       // Reset form
@@ -111,8 +139,6 @@ export default function SavedAddressesScreen() {
       setEditingId(null)
       setShowForm(false)
 
-      // Reload
-      await loadAddresses()
       Alert.alert('Éxito', editingId ? 'Dirección actualizada' : 'Dirección guardada')
     } catch (err) {
       console.error('Error saving address:', err)
@@ -146,7 +172,9 @@ export default function SavedAddressesScreen() {
               .eq('user_id', user?.id)
 
             if (error) throw error
-            await loadAddresses()
+            
+            // Optimistic update - remove from list
+            setAddresses(addresses.filter((addr) => addr.id !== addressId))
           } catch (err) {
             Alert.alert('Error', 'No se pudo eliminar la dirección')
           }
