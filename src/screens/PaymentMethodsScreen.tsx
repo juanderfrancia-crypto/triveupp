@@ -37,26 +37,39 @@ export default function PaymentMethodsScreen() {
   const [cardCVV, setCardCVV] = useState('')
   const [saving, setSaving] = useState(false)
   const [paymentType, setPaymentType] = useState<'credit_card' | 'debit_card' | 'bank_account' | 'digital_wallet'>('credit_card')
+  const [loadedOnce, setLoadedOnce] = useState(false)
 
   useEffect(() => {
-    loadPaymentMethods()
-  }, [])
+    // Solo cargar una vez cuando tengamos user.id
+    if (user?.id && !loadedOnce) {
+      loadPaymentMethods()
+    }
+  }, [user?.id, loadedOnce])
 
   const loadPaymentMethods = async () => {
-    if (!user?.id) return
+    if (!user?.id || loadedOnce) return
 
     try {
+      setLoading(true)
       const { data, error } = await supabase
         .from('payment_methods')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setMethods(data || [])
+      if (error) {
+        console.error('Error loading payment methods:', error)
+        // No mostrar alert aquí, solo setear métodos vacío si es primer intento
+        setMethods([])
+      } else {
+        setMethods(data || [])
+      }
+      
+      setLoadedOnce(true)
     } catch (err) {
       console.error('Error loading payment methods:', err)
-      Alert.alert('Error', 'No se pueden cargar los métodos de pago')
+      setMethods([])
+      setLoadedOnce(true)
     } finally {
       setLoading(false)
     }
@@ -99,15 +112,18 @@ export default function PaymentMethodsScreen() {
       setSaving(true)
       const lastFour = cardNumber.replace(/\D/g, '').slice(-4)
 
-      const { error } = await supabase.from('payment_methods').insert({
+      const { data, error } = await supabase.from('payment_methods').insert({
         user_id: user.id,
         type: paymentType,
         label: cardName,
         last_four: lastFour,
-        is_default: methods.length === 0, // La primera es por defecto
-      })
+        is_default: methods.length === 0,
+      }).select().single()
 
       if (error) throw error
+
+      // Actualizar estado local inmediatamente (no llamar loadPaymentMethods)
+      setMethods([data as PaymentMethod, ...methods])
 
       // Reset form
       setCardNumber('')
@@ -117,7 +133,6 @@ export default function PaymentMethodsScreen() {
       setPaymentType('credit_card')
       setShowForm(false)
 
-      await loadPaymentMethods()
       Alert.alert('Éxito', 'Método de pago agregado')
     } catch (err) {
       console.error('Error saving payment method:', err)
@@ -143,7 +158,14 @@ export default function PaymentMethodsScreen() {
         .update({ is_default: true })
         .eq('id', methodId)
 
-      await loadPaymentMethods()
+      // Actualizar estado local inmediatamente (no llamar loadPaymentMethods)
+      setMethods(
+        methods.map((m) => ({
+          ...m,
+          is_default: m.id === methodId,
+        }))
+      )
+
       Alert.alert('Éxito', 'Método de pago establecido como predeterminado')
     } catch (err) {
       Alert.alert('Error', 'No se pudo actualizar')
@@ -164,7 +186,8 @@ export default function PaymentMethodsScreen() {
               .eq('id', methodId)
               .eq('user_id', user?.id)
 
-            await loadPaymentMethods()
+            // Actualizar estado local inmediatamente (no llamar loadPaymentMethods)
+            setMethods(methods.filter((m) => m.id !== methodId))
             Alert.alert('Éxito', 'Método de pago eliminado')
           } catch (err) {
             Alert.alert('Error', 'No se pudo eliminar')
