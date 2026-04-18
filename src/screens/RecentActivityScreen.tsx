@@ -22,19 +22,23 @@ export default function RecentActivityScreen() {
   const { user } = useAuth()
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadedOnce, setLoadedOnce] = useState(false)
 
   useEffect(() => {
-    loadActivities()
-  }, [])
+    if (user?.id && !loadedOnce) {
+      loadActivities()
+    } else if (!user?.id) {
+      setLoading(false)
+    }
+  }, [user?.id, loadedOnce])
 
   const loadActivities = async () => {
-    if (!user?.id) return
-
     try {
+      setLoading(true)
       const { data, error } = await supabase
         .from('user_activity')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -50,9 +54,11 @@ export default function RecentActivityScreen() {
           created_at: item.created_at,
         })) || []
       )
+      setLoadedOnce(true)
     } catch (err) {
       console.error('Error loading activities:', err)
       Alert.alert('Error', 'No se pueden cargar las actividades')
+      setLoading(false)
     } finally {
       setLoading(false)
     }
