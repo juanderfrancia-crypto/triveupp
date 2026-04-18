@@ -84,6 +84,10 @@ export default function RecentActivityScreen() {
     return 'notifications-outline'
   }
 
+  const getActivityColor = (status: 'exitoso' | 'fallido') => {
+    return status === 'exitoso' ? COLORS.success : COLORS.error
+  }
+
   return (
     <View style={[styles.safeContainer, { paddingTop: insets.top }]}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
