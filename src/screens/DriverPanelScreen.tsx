@@ -17,6 +17,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
 import { checkDriverApprovalStatus, getDriverRestrictionMessage, type DriverApprovalStatus } from '../services/driverApproval'
+import { notifyRouteCancellation } from '../services/pushNotifications'
 import { useNotifications } from '../hooks/useNotifications'
 
 interface Passenger {
@@ -211,6 +212,41 @@ export default function DriverPanelScreen() {
         const route = routes.find((routeItem) => routeItem.id === routeId)
         if (route) {
           await notifyPassengers(route)
+        }
+      }
+
+      if (newStatus === 'cancelled') {
+        const route = routes.find((routeItem) => routeItem.id === routeId)
+        if (route && user?.id) {
+          // Obtener pasajeros con push tokens
+          const { data: bookings } = await supabase
+            .from('bookings')
+            .select(`
+              passenger_id,
+              profiles:passenger_id(push_token)
+            `)
+            .eq('route_id', routeId)
+            .eq('booking_status', 'confirmed')
+
+          const passengers = (bookings || []).map((b: any) => ({
+            passenger_id: b.passenger_id,
+            push_token: b.profiles?.push_token,
+          }))
+
+          // Notificar sin esperar respuesta
+          notifyRouteCancellation(
+            routeId,
+            user.id,
+            user.name || 'Conductor',
+            passengers,
+            {
+              origin: route.origin,
+              destination: route.destination,
+              departureTime: route.departure_time,
+            }
+          ).catch((err) => {
+            console.warn('Error sending route cancellation notifications:', err)
+          })
         }
       }
 

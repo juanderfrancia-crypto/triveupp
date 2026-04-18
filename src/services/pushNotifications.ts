@@ -415,3 +415,72 @@ export const notifyTripCancellation = async (
     return false
   }
 }
+
+// Notificar a todos los pasajeros cuando el conductor cancela una ruta
+export const notifyRouteCancellation = async (
+  routeId: string,
+  driverId: string,
+  driverName: string,
+  passengers: Array<{
+    passenger_id: string
+    push_token?: string
+  }>,
+  routeInfo: {
+    origin: string
+    destination: string
+    departureTime?: string
+  }
+) => {
+  try {
+    console.log('[DEBUG notifyRouteCancellation] Notificando cancelación a pasajeros:', passengers.length)
+
+    if (!passengers || passengers.length === 0) {
+      console.log('[DEBUG notifyRouteCancellation] No hay pasajeros para notificar')
+      return true
+    }
+
+    // Notificar a todos los pasajeros en paralelo
+    const notificationPromises = passengers.map(async (passenger) => {
+      if (!passenger.push_token) {
+        console.log('[DEBUG notifyRouteCancellation] Pasajero sin push token:', passenger.passenger_id)
+        return false
+      }
+
+      const notificationTitle = '❌ Tu viaje ha sido cancelado'
+      const notificationBody = `${driverName} canceló el viaje ${routeInfo.origin} → ${routeInfo.destination}`
+
+      console.log('[DEBUG notifyRouteCancellation] Enviando a:', passenger.push_token)
+
+      const pushResult = await sendPushNotificationToUser(
+        passenger.push_token,
+        notificationTitle,
+        notificationBody,
+        {
+          type: 'trip_cancelled',
+          route_id: routeId,
+          origin: routeInfo.origin,
+          destination: routeInfo.destination,
+          driver_id: driverId,
+          driver_name: driverName,
+          reason: 'Conductor canceló',
+        }
+      )
+
+      return pushResult
+    })
+
+    const results = await Promise.all(notificationPromises)
+    const successCount = results.filter((r) => r).length
+
+    console.log(
+      '[DEBUG notifyRouteCancellation] Notificaciones enviadas:',
+      successCount,
+      'de',
+      passengers.length
+    )
+    return true
+  } catch (error) {
+    console.error('[DEBUG notifyRouteCancellation] Error:', error)
+    return false
+  }
+}
