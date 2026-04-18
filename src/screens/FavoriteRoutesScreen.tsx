@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
+import { useState, useEffect } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { useAppStore } from '../store/useAppStore'
+import { useSuggestedRoutes } from '../hooks/useSuggestedRoutes'
 
 // Mock data - rutas favoritas guardadas
-const favoriteRoutes = [
+const mockFavoriteRoutes = [
   {
     id: '1',
     origin: 'Cali',
@@ -29,6 +31,38 @@ const favoriteRoutes = [
 
 export default function FavoriteRoutesScreen() {
   const navigation = useNavigation<any>()
+  const { user } = useAppStore()
+  const { suggestedRoutes, loading: suggestedLoading, fetchSuggestedRoutes } = useSuggestedRoutes(user?.id)
+  const [favoriteRoutes, setFavoriteRoutes] = useState(mockFavoriteRoutes)
+  const [savedSuggested, setSavedSuggested] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchSuggestedRoutes()
+    }
+  }, [user?.id, fetchSuggestedRoutes])
+
+  const handleSaveSuggestedRoute = (origin: string, destination: string) => {
+    const key = `${origin}|${destination}`
+    const newRoute = {
+      id: `suggested-${Date.now()}`,
+      origin,
+      destination,
+      price: 0,
+      frequency: 'Sugerida',
+      avgTime: '—',
+      icon: 'star',
+    }
+
+    setFavoriteRoutes([...favoriteRoutes, newRoute])
+    setSavedSuggested((prev) => new Set([...prev, key]))
+
+    Alert.alert(
+      '✓ Guardada',
+      `${origin} → ${destination} agregada a favoritos`,
+      [{ text: 'Aceptar', style: 'default' }]
+    )
+  }
 
   const handleRemoveFavorite = (routeId: string, origin: string, destination: string) => {
     Alert.alert(
@@ -74,11 +108,92 @@ export default function FavoriteRoutesScreen() {
           </View>
         ) : (
           <View style={styles.content}>
-            <Text style={styles.sectionInfo}>
-              {favoriteRoutes.length} ruta{favoriteRoutes.length > 1 ? 's' : ''} guardada{favoriteRoutes.length > 1 ? 's' : ''}
-            </Text>
+            {/* SECCIÓN: RUTAS SUGERIDAS DEL HISTORIAL */}
+            {suggestedRoutes.length > 0 && (
+              <View>
+                <Text style={styles.sectionTitle}>Rutas Sugeridas</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Basadas en tu historial de viajes
+                </Text>
 
-            {favoriteRoutes.map((route) => (
+                {suggestedLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  </View>
+                ) : (
+                  suggestedRoutes.map((route, index) => {
+                    const key = `${route.origin}|${route.destination}`
+                    const isSaved = savedSuggested.has(key)
+
+                    return (
+                      <View key={`suggested-${index}`} style={styles.suggestedRouteCard}>
+                        <View style={styles.routeContent}>
+                          <View style={styles.routeRow}>
+                            <View style={styles.routePoint}>
+                              <View style={styles.routeDot} />
+                              <Text style={styles.routeText}>{route.origin}</Text>
+                            </View>
+                            <View style={styles.routeArrow}>
+                              <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
+                            </View>
+                            <View style={styles.routePoint}>
+                              <View style={[styles.routeDot, styles.routeDotEnd]} />
+                              <Text style={styles.routeText}>{route.destination}</Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.suggestedStats}>
+                            <View style={styles.statBadge}>
+                              <Ionicons name="repeat-outline" size={12} color={COLORS.primary} />
+                              <Text style={styles.statText}>{route.frequency}x</Text>
+                            </View>
+                            {route.avgPrice && (
+                              <View style={styles.statBadge}>
+                                <Ionicons name="cash-outline" size={12} color={COLORS.success} />
+                                <Text style={styles.statText}>
+                                  ${route.avgPrice.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.saveSuggestedBtn,
+                            isSaved && styles.saveSuggestedBtnSaved,
+                          ]}
+                          onPress={() =>
+                            !isSaved && handleSaveSuggestedRoute(route.origin, route.destination)
+                          }
+                          disabled={isSaved}
+                        >
+                          <Ionicons
+                            name={isSaved ? 'checkmark' : 'add'}
+                            size={18}
+                            color={isSaved ? COLORS.success : COLORS.primary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  })
+                )}
+
+                {suggestedRoutes.length > 0 && favoriteRoutes.length > 0 && (
+                  <View style={styles.divider} />
+                )}
+              </View>
+            )}
+
+            {/* SECCIÓN: RUTAS FAVORITAS GUARDADAS */}
+            {favoriteRoutes.length > 0 && (
+              <View>
+                <Text style={styles.sectionTitle}>Mis Favoritas</Text>
+                <Text style={styles.sectionInfo}>
+                  {favoriteRoutes.length} ruta{favoriteRoutes.length > 1 ? 's' : ''} guardada{favoriteRoutes.length > 1 ? 's' : ''}
+                </Text>
+
+                {favoriteRoutes.map((route) => (
               <View key={route.id} style={styles.routeCard}>
                 <View style={styles.routeHeader}>
                   <View style={styles.starBadge}>
@@ -129,7 +244,9 @@ export default function FavoriteRoutesScreen() {
                   <Text style={styles.bookBtnText}>Reservar ahora</Text>
                 </TouchableOpacity>
               </View>
-            ))}
+                ))}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -305,4 +422,80 @@ const styles = StyleSheet.create({
     color: COLORS.textInverse,
     fontWeight: '600',
   },
+
+  // Nueva sección: Rutas sugeridas
+  sectionTitle: {
+    ...TYPOGRAPHY.h4,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+    marginHorizontal: SPACING.lg,
+  },
+  sectionSubtitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+    marginHorizontal: SPACING.lg,
+  },
+  suggestedRouteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  routeContent: {
+    flex: 1,
+    gap: SPACING.md,
+  },
+  suggestedStats: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.sm,
+  },
+  statText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  saveSuggestedBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  saveSuggestedBtnSaved: {
+    backgroundColor: COLORS.success + '15',
+    borderColor: COLORS.success,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.lg,
+    marginHorizontal: SPACING.lg,
+  },
+  loadingContainer: {
+    paddingVertical: SPACING.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 })
+

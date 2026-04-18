@@ -409,6 +409,43 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.sectionTitle}>Mis Viajes</Text>
+
+          <View style={styles.menuCard}>
+            <TouchableOpacity 
+              style={[styles.menuItem]}
+              onPress={() => navigation.navigate('ActiveTrips' as never)}
+            >
+              <View style={styles.menuIcon}>
+                <Ionicons name="navigate-circle-outline" size={20} color={COLORS.success} />
+              </View>
+              <Text style={styles.menuText}>Viajes Activos</Text>
+              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity 
+              style={[styles.menuItem]}
+              onPress={() => navigation.navigate('TripHistory' as never)}
+            >
+              <View style={styles.menuIcon}>
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.menuText}>Historial de Viajes</Text>
+              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity 
+              style={[styles.menuItem, styles.menuItemLast]}
+              onPress={() => navigation.navigate('Reviews' as never)}
+            >
+              <View style={styles.menuIcon}>
+                <Ionicons name="star-outline" size={20} color={COLORS.warning} />
+              </View>
+              <Text style={styles.menuText}>Reseñas y Ratings</Text>
+              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={styles.driverCta}
             onPress={() => handleRoleSwitch('driver')}
@@ -802,6 +839,10 @@ const styles = StyleSheet.create({
   },
   menuItemLast: {
     borderBottomWidth: 0,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
   },
   menuIcon: {
     width: 44,

@@ -14,7 +14,7 @@ export default function TripHistoryScreen() {
   const navigation = useNavigation<any>()
   const { user } = useAppStore()
   const { getPassengerBookings, loading } = useBookings()
-  const [filter, setFilter] = useState<'all' | 'completed' | 'cancelled'>('all')
+  const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all')
   const [tripHistory, setTripHistory] = useState<any[]>([])
   const [ratingModalVisible, setRatingModalVisible] = useState(false)
   const [selectedTrip, setSelectedTrip] = useState<any | null>(null)
@@ -45,6 +45,7 @@ export default function TripHistoryScreen() {
           seats: booking.seat_number ? 1 : 0,
           price: booking.price || route.price_per_seat || 0,
           status: booking.booking_status || 'confirmed',
+          routeStatus: route.status || 'scheduled',
           rating: route.driver_rating || null,
           driver: route.driver_name || 'Conductor',
           driver_id: route.driver_id || null,
@@ -72,7 +73,8 @@ export default function TripHistoryScreen() {
 
   const filteredTrips = tripHistory.filter((trip) => {
     if (filter === 'all') return true
-    if (filter === 'completed') return trip.status === 'completed'
+    if (filter === 'active') return ['scheduled', 'in_progress'].includes(trip.routeStatus)
+    if (filter === 'completed') return trip.status === 'completed' && !['scheduled', 'in_progress'].includes(trip.routeStatus)
     if (filter === 'cancelled') return trip.status === 'cancelled'
     return true
   })
@@ -203,14 +205,14 @@ export default function TripHistoryScreen() {
 
         {/* Filter Tabs */}
         <View style={styles.filterTabs}>
-          {(['all', 'completed', 'cancelled'] as const).map((f) => (
+          {(['all', 'active', 'completed', 'cancelled'] as const).map((f) => (
             <TouchableOpacity
               key={f}
               style={[styles.filterTab, filter === f && styles.filterTabActive]}
               onPress={() => setFilter(f)}
             >
               <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-                {f === 'all' ? 'Todos' : f === 'completed' ? 'Completados' : 'Cancelados'}
+                {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : f === 'completed' ? 'Completados' : 'Cancelados'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -229,6 +231,8 @@ export default function TripHistoryScreen() {
             <Text style={styles.emptyText}>
               {filter === 'all'
                 ? 'Aún no tienes viajes realizados'
+                : filter === 'active'
+                ? 'No hay viajes activos'
                 : filter === 'completed'
                 ? 'No hay viajes completados'
                 : 'No hay viajes cancelados'}
