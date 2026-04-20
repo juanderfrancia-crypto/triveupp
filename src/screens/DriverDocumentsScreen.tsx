@@ -279,16 +279,17 @@ export default function DriverDocumentsScreen() {
         copyToCacheDirectory: true,
       })
 
-      if (result.type !== 'success' || !result.uri) {
+      if (!result.assets || result.assets.length === 0) {
         setUploadingDocType(null)
         return
       }
 
+      const asset = result.assets[0]
       const file = {
-        uri: result.uri,
-        name: result.name || `documento-${documentType}`,
-        size: result.size || 0,
-        mimeType: result.mimeType || 'application/octet-stream',
+        uri: asset.uri,
+        name: asset.name || `documento-${documentType}`,
+        size: asset.size || 0,
+        mimeType: asset.mimeType || 'application/octet-stream',
       }
 
       // Validate file size (max 10MB)

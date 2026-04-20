@@ -135,7 +135,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'trive-app-store',
       storage: createAsyncStorage(),
-      partialize: (state) => ({
+      partialize: (state): Partial<AppState> => ({
         hasSeenOnboarding: state.hasSeenOnboarding,
         pendingVerificationEmail: state.pendingVerificationEmail,
         pendingVerificationName: state.pendingVerificationName,

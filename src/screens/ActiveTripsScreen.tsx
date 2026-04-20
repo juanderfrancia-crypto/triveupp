@@ -307,7 +307,7 @@ export default function ActiveTripsScreen() {
       {/* Detalles del viaje */}
       <View style={styles.detailsSection}>
         <View style={styles.detailItem}>
-          <Ionicons name="chair-outline" size={16} color={COLORS.textSecondary} />
+          <Ionicons name="car-outline" size={16} color={COLORS.textSecondary} />
           <Text style={styles.detailText}>Asiento: {trip.seatNumber}</Text>
         </View>
         <View style={styles.detailItem}>

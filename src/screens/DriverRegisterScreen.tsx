@@ -624,7 +624,6 @@ export default function DriverRegisterScreen() {
                 style={styles.input}
                 placeholder={vehicleTypeId ? `Ej: ${maxSeats}` : 'Selecciona vehículo'}
                 placeholderTextColor={COLORS.textTertiary}
-                placeholderTextColor={COLORS.textTertiary}
                 value={totalSeats}
                 onChangeText={handleTotalSeatsChange}
                 keyboardType="numeric"

@@ -27,9 +27,12 @@ async function getStorageUrl(
       throw error || new Error('No se pudo generar la URL de storage')
     }
 
-    const { data: publicData, error: publicError } = await supabase.storage
+    const result = await supabase.storage
       .from(bucket)
       .getPublicUrl(filePath)
+    
+    const publicData = result.data
+    const publicError = result.error
 
     if (publicData?.publicUrl && !publicData.publicUrl.includes('null')) {
       return publicData.publicUrl

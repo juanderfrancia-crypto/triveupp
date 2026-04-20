@@ -121,10 +121,7 @@ export default function AppNavigator() {
             <Stack.Screen 
               name="VerifyEmail" 
               component={VerifyEmailScreen}
-              options={{
-                animationEnabled: true,
-                cardStyle: { backgroundColor: '#fff' }
-              }}
+              options={{}}
             />
             {/* Permitir volver a Register desde VerifyEmail */}
             <Stack.Screen name="Register" component={RegisterScreen} />
@@ -189,10 +186,7 @@ export default function AppNavigator() {
           <Stack.Screen 
             name="VerifyEmail" 
             component={VerifyEmailScreen}
-            options={{
-              animationEnabled: true,
-              cardStyle: { backgroundColor: '#fff' }
-            }}
+            options={{}}
           />
         )}
       </Stack.Navigator>

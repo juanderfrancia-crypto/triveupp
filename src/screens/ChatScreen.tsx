@@ -308,7 +308,7 @@ const ChatScreen = ({ navigation }: any) => {
           currentOtherUserId,
           base64,
           result.durationMs,
-          user.name || 'Usuario'
+          user.email || 'Usuario'
         )
 
         // Recargar conversación

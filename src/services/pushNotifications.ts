@@ -358,8 +358,8 @@ export const notifyTripCancellation = async (
       return false
     }
 
-    const route = booking.routes
-    const driver = route?.profiles
+    const route = (booking.routes as any)?.[0]
+    const driver = ((route?.profiles as any) || [])[0] as any
     const passenger = booking.passenger
 
     if (!route || !driver || !passenger) {

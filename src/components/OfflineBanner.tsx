@@ -25,7 +25,7 @@ export default function OfflineBanner() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Ionicons name="wifi-off" size={20} color="#FFFFFF" style={styles.icon} />
+        <Ionicons name="cloud-offline-outline" size={20} color="#FFFFFF" style={styles.icon} />
         <Text style={styles.text}>Sin conexión a internet</Text>
       </View>
     </View>

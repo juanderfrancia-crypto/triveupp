@@ -102,7 +102,7 @@ export default function ContactRequestsScreen() {
         </View>
 
         <View style={styles.emptyContainer}>
-          <Ionicons name="inbox-outline" size={64} color={COLORS.grayLight} />
+          <Ionicons name="mail-outline" size={64} color={COLORS.grayLight} />
           <Text style={styles.emptyTitle}>Sin solicitudes pendientes</Text>
           <Text style={styles.emptySubtitle}>
             Cuando otros pasajeros te soliciten contacto, aparecerán aquí
@@ -218,12 +218,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.sizes.lg,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: '600',
     color: COLORS.dark,
   },
   requestCount: {
-    fontSize: TYPOGRAPHY.sizes.md,
+    fontSize: TYPOGRAPHY.size.md,
     fontWeight: '700',
     color: COLORS.primary,
     backgroundColor: COLORS.primary + '15',
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    ...SHADOWS.light,
+    ...SHADOWS.sm,
   },
   requestHeader: {
     marginBottom: SPACING.md,
@@ -261,19 +261,19 @@ const styles = StyleSheet.create({
   },
   senderInitial: {
     color: '#FFFFFF',
-    fontSize: TYPOGRAPHY.sizes.lg,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: '700',
   },
   senderDetails: {
     flex: 1,
   },
   senderName: {
-    fontSize: TYPOGRAPHY.sizes.md,
+    fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
     color: COLORS.dark,
   },
   routeInfo: {
-    fontSize: TYPOGRAPHY.sizes.sm,
+    fontSize: TYPOGRAPHY.size.sm,
     color: COLORS.grayDark,
     marginTop: SPACING.xs,
   },
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary + '08',
   },
   actionBtnText: {
-    fontSize: TYPOGRAPHY.sizes.sm,
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
   },
   emptyContainer: {
@@ -311,14 +311,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
   emptyTitle: {
-    fontSize: TYPOGRAPHY.sizes.lg,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: '600',
     color: COLORS.dark,
     marginTop: SPACING.md,
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: TYPOGRAPHY.sizes.sm,
+    fontSize: TYPOGRAPHY.size.sm,
     color: COLORS.grayDark,
     marginTop: SPACING.sm,
     textAlign: 'center',

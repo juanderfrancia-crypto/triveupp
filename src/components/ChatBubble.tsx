@@ -74,11 +74,11 @@ export const ChatBubble: React.FC<ChatBubbleProps> = memo(({
 
   const containerStyle = [
     baseStyles.container,
-    { flexDirection: isFromMe ? 'row-reverse' : 'row' },
+    isFromMe ? { flexDirection: 'row-reverse' as const } : { flexDirection: 'row' as const },
   ]
   const bubbleWrapperStyle = [
     baseStyles.bubbleWrapper,
-    { flexDirection: isFromMe ? 'row-reverse' : 'row' },
+    isFromMe ? { flexDirection: 'row-reverse' as const } : { flexDirection: 'row' as const },
   ]
   const bubbleStyle = [
     baseStyles.bubble,

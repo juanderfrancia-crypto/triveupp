@@ -46,19 +46,18 @@ export const useAudioRecorder = () => {
 
     try {
       const recording = recordingRef.current
-      if (typeof recording.stopAsync === 'function') {
-        await recording.stopAsync()
-      } else if (typeof recording.stopAndUnloadAsync === 'function') {
+      // Use the modern API that exists in expo-av
+      if (recording.stopAndUnloadAsync) {
         await recording.stopAndUnloadAsync()
       } else {
-        throw new Error('El objeto de grabación no soporta stopAsync ni stopAndUnloadAsync')
+        throw new Error('Recording object does not support stop methods')
       }
 
       const uri = recording.getURI()
       
-      // Obtener duración
+      // Get duration
       const status = await recording.getStatusAsync()
-      const durationMs = status.durationMillis || 0
+      const durationMs = status?.durationMillis || 0
       
       setIsRecording(false)
       setDuration(0)
@@ -76,12 +75,10 @@ export const useAudioRecorder = () => {
     if (recordingRef.current) {
       try {
         const recording = recordingRef.current
-        if (typeof recording.stopAsync === 'function') {
-          await recording.stopAsync()
-        } else if (typeof recording.stopAndUnloadAsync === 'function') {
+        if (recording.stopAndUnloadAsync) {
           await recording.stopAndUnloadAsync()
         } else {
-          console.warn('El objeto de grabación no soporta stopAsync ni stopAndUnloadAsync')
+          console.warn('Recording object does not support stop methods')
         }
       } catch (err) {
         console.error('Error cancelling recording:', err)

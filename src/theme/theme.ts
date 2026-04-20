@@ -42,12 +42,20 @@ export const COLORS = {
   surface: '#FFFFFF', // Blanco puro para cards/containers
   surfaceAlt: '#F5F5F5', // Gris muy claro alternativo
   surfaceHover: '#F0F0F0', // Gris claro para hover states
+  backgroundAlt: '#F5F5F5', // Alias de surfaceAlt
   
   // Texto - Negro profundo y grises (no azul/púrpura)
   textPrimary: '#0F0F0F', // Negro profundo para máximo contraste
   textSecondary: '#5A5A5A', // Gris oscuro profesional
   textTertiary: '#8B8B8B', // Gris medio
   textInverse: '#FFFFFF', // Blanco para texto sobre azul
+  
+  // Alias para compatibilidad
+  text: '#0F0F0F', // Alias de textPrimary
+  secondary: '#5A5A5A', // Alias de textSecondary
+  dark: '#0F0F0F', // Alias de textPrimary
+  grayLight: '#D1D5DB', // Gris claro para elementos deshabilitados
+  grayDark: '#374151', // Gris oscuro para elementos
   
   // Bordes - Grises sutiles
   border: '#E8E8E8', // Gris sutil
@@ -105,6 +113,36 @@ export const TYPOGRAPHY = {
   labelMedium: {
     fontSize: 13,
     fontWeight: '500' as any,
+    lineHeight: 20,
+  },
+  caption: {
+    fontSize: 12,
+    fontWeight: '400' as any,
+    lineHeight: 16,
+  },
+  button: {
+    fontSize: 16,
+    fontWeight: '600' as any,
+    lineHeight: 24,
+  },
+  subtitle1: {
+    fontSize: 18,
+    fontWeight: '500' as any,
+    lineHeight: 26,
+  },
+  subtitle2: {
+    fontSize: 16,
+    fontWeight: '500' as any,
+    lineHeight: 24,
+  },
+  labelSmall: {
+    fontSize: 12,
+    fontWeight: '500' as any,
+    lineHeight: 16,
+  },
+  body2: {
+    fontSize: 14,
+    fontWeight: '400' as any,
     lineHeight: 20,
   },
   size: {
