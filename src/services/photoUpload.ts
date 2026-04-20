@@ -32,13 +32,12 @@ async function getStorageUrl(
       .getPublicUrl(filePath)
     
     const publicData = result.data
-    const publicError = result.error
 
     if (publicData?.publicUrl && !publicData.publicUrl.includes('null')) {
       return publicData.publicUrl
     }
 
-    throw error || publicError || new Error('No se pudo generar la URL de storage')
+    throw error || new Error('No se pudo generar la URL de storage')
   } catch (err) {
     throw err
   }

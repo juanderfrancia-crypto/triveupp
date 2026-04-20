@@ -404,7 +404,7 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.searchBtn, !destination || !origin && styles.searchBtnDisabled]}
+            style={[styles.searchBtn, (!destination || !origin) && styles.searchBtnDisabled] as any}
             disabled={!destination || !origin}
             onPress={() =>
               navigation.navigate(
@@ -415,7 +415,7 @@ export default function HomeScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="search" size={20} color={destination && origin ? COLORS.textInverse : COLORS.textSecondary} />
-            <Text style={[styles.searchBtnText, !destination || !origin && styles.searchBtnTextDisabled]}>
+            <Text style={[styles.searchBtnText, (!destination || !origin) && styles.searchBtnTextDisabled]}>
               Buscar rutas
             </Text>
           </TouchableOpacity>

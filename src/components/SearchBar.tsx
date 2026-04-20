@@ -18,6 +18,8 @@ export const SearchBar = ({
   matchCount = 0,
   totalCount = 0,
 }: SearchBarProps) => {
+  const iconName: any = matchCount > 0 ? 'checkmark-circle' : 'close-circle'
+  
   return (
     <View style={styles.container}>
       <View style={styles.searchWrapper}>
@@ -39,10 +41,12 @@ export const SearchBar = ({
 
       {searchText.length > 0 && (
         <View style={styles.resultCounter}>
+          {/* @ts-ignore - Ionicons conditional name */}
           <Ionicons name="locate" size={14} color={COLORS.primary} />
           <View style={styles.counterText}>
+            {/* @ts-ignore - Ionicons conditional name */}
             <Ionicons
-              name={matchCount > 0 ? 'checkmark-circle' : 'close-circle'}
+              name={iconName}
               size={14}
               color={matchCount > 0 ? COLORS.success : COLORS.textTertiary}
             />

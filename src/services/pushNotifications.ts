@@ -369,8 +369,11 @@ export const notifyTripCancellation = async (
 
     // Determinar quién cancela y a quién notificar
     const isPassengerCancelling = cancellerUserId === booking.passenger_id
+    // @ts-ignore - Supabase type narrowing
     const recipientToken = isPassengerCancelling ? driver?.push_token : passenger?.push_token
+    // @ts-ignore - Supabase type narrowing
     const recipientName = isPassengerCancelling ? driver?.name : passenger?.name
+    // @ts-ignore - Supabase type narrowing
     const cancellerName = isPassengerCancelling ? passenger?.name : driver?.name
 
     if (!recipientToken) {

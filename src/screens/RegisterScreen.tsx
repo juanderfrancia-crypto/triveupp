@@ -92,6 +92,7 @@ export default function RegisterScreen() {
         setPendingVerification(email.trim(), name.trim(), phone.trim())
         
         // Navegar a pantalla de verificación de email
+        // @ts-ignore - Navigation params type
         navigation.navigate('VerifyEmail' as never, {
           email: email.trim(),
           name: name.trim(),

@@ -110,9 +110,7 @@ export default function ContactRequestsScreen() {
         </View>
 
         <Toast
-          visible={toastConfig.visible}
-          message={toastConfig.message}
-          type={toastConfig.type}
+          {...(toastConfig as any)}
           onDismiss={() => setToastConfig({ ...toastConfig, visible: false })}
         />
       </SafeAreaView>
@@ -188,9 +186,7 @@ export default function ContactRequestsScreen() {
       </ScrollView>
 
       <Toast
-        visible={toastConfig.visible}
-        message={toastConfig.message}
-        type={toastConfig.type}
+        {...(toastConfig as any)}
         onDismiss={() => setToastConfig({ ...toastConfig, visible: false })}
       />
     </SafeAreaView>

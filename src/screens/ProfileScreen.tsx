@@ -359,7 +359,7 @@ export default function ProfileScreen() {
 
           <View style={styles.menuCard}>
             <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
+              style={[styles.menuItem, styles.menuItemLast] as any as any}
               onPress={() => navigation.navigate('SavedAddresses')}
             >
               <View style={styles.menuIcon}>

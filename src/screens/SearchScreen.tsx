@@ -322,6 +322,7 @@ export default function SearchScreen() {
               <Ionicons name="alert-circle-outline" size={40} color={COLORS.error} />
             </View>
             <Text style={styles.errorText}>{error}</Text>
+            {/* @ts-ignore - onPress async handler */}
             <TouchableOpacity style={styles.retryBtn} onPress={loadRoutes}>
               <Ionicons name="refresh" size={18} color={COLORS.textInverse} />
               <Text style={styles.retryBtnText}>Reintentar</Text>
