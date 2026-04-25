@@ -46,15 +46,24 @@ export const getRatingConfig = async (): Promise<RatingConfig> => {
       .from('rating_config')
       .select('weight_average, weight_consistency, weight_recency, weight_recommendations')
       .eq('name', 'default')
-      .single()
+      .limit(1)
 
     if (error) throw error
 
+    if (!data || data.length === 0) {
+      return {
+        weightAverage: 0.5,
+        weightConsistency: 0.2,
+        weightRecency: 0.15,
+        weightRecommendations: 0.15,
+      }
+    }
+
     return {
-      weightAverage: data?.weight_average || 0.5,
-      weightConsistency: data?.weight_consistency || 0.2,
-      weightRecency: data?.weight_recency || 0.15,
-      weightRecommendations: data?.weight_recommendations || 0.15,
+      weightAverage: data[0]?.weight_average || 0.5,
+      weightConsistency: data[0]?.weight_consistency || 0.2,
+      weightRecency: data[0]?.weight_recency || 0.15,
+      weightRecommendations: data[0]?.weight_recommendations || 0.15,
     }
   } catch (error) {
     console.error('Error getting rating config:', error)

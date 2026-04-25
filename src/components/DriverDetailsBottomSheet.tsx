@@ -219,7 +219,7 @@ export default function DriverDetailsBottomSheet({
 
                       <View style={styles.routeInfoRow}>
                         <Ionicons
-                          name="seat"
+                          name="people"
                           size={16}
                           color={COLORS.primary}
                         />
