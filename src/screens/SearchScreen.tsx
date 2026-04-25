@@ -20,6 +20,8 @@ import { useAppStore } from '../store/useAppStore'
 import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
 import OfflineBanner from '../components/OfflineBanner'
 import RouteCard from '../components/RouteCard'
+import DriverDetailsBottomSheet from '../components/DriverDetailsBottomSheet'
+import { useDriverReputation } from '../hooks/useDriverReputation'
 
 export default function SearchScreen() {
   const navigation = useNavigation()
@@ -51,6 +53,11 @@ export default function SearchScreen() {
   const [filter, setFilter] = useState<'all' | 'available'>('all')
   const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>(routeTransportType)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectedDriver, setSelectedDriver] = useState<{ id: string; name: string; route: Route } | null>(null)
+  const [bottomSheetVisible, setBottomSheetVisible] = useState(false)
+
+  // Fetch reputation for selected driver
+  const { reputation, loading: reputationLoading } = useDriverReputation(selectedDriver?.id || '')
 
   useEffect(() => {
     setSearch(routeDestination)
@@ -139,6 +146,22 @@ export default function SearchScreen() {
     setSelectedRoute(route)
     // Navegar a SeatSelection
     navigation.navigate('SeatSelection' as never)
+  }
+
+  const handleOpenDetails = (driverId: string) => {
+    const route = displayRoutes.find(r => r.driver_id === driverId)
+    if (route) {
+      setSelectedDriver({ id: driverId, name: route.driver_name || 'Conductor', route })
+      setBottomSheetVisible(true)
+    }
+  }
+
+  const handleReserveFromBottomSheet = () => {
+    if (selectedDriver?.route) {
+      setSelectedRoute(selectedDriver.route)
+      setBottomSheetVisible(false)
+      navigation.navigate('SeatSelection' as never)
+    }
   }
 
   const formatPrice = (price: number) => {
@@ -348,6 +371,7 @@ export default function SearchScreen() {
                 key={route.id}
                 route={route}
                 onPress={handleSelectRoute}
+                onDetails={handleOpenDetails}
                 formatTime={formatTime}
                 formatPrice={formatPrice}
               />
@@ -355,6 +379,17 @@ export default function SearchScreen() {
           </View>
         )}
       </ScrollView>
+      
+      {/* Bottom Sheet for Driver Details */}
+      <DriverDetailsBottomSheet
+        visible={bottomSheetVisible}
+        onClose={() => setBottomSheetVisible(false)}
+        onReserve={handleReserveFromBottomSheet}
+        reputation={reputation}
+        driverName={selectedDriver?.name || 'Conductor'}
+        loading={reputationLoading}
+        route={selectedDriver?.route}
+      />
     </SafeAreaView>
   )
 }
