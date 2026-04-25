@@ -19,6 +19,7 @@ import { useRoutes, Route } from '../hooks/useRoutes'
 import { useAppStore } from '../store/useAppStore'
 import { errorHandler, ErrorType, ErrorSeverity } from '../services/errorHandler'
 import OfflineBanner from '../components/OfflineBanner'
+import RouteCard from '../components/RouteCard'
 
 export default function SearchScreen() {
   const navigation = useNavigation()
@@ -343,137 +344,13 @@ export default function SearchScreen() {
         ) : (
           <View style={styles.routesContainer}>
             {displayRoutes.map((route) => (
-              <TouchableOpacity
+              <RouteCard
                 key={route.id}
-                style={styles.routeCardWrapper}
-                onPress={() => handleSelectRoute(route)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.routeCardGradient}>
-                  {/* Status Badge */}
-                  <View style={[styles.routeCardBadge, route.available_seats > 0 ? styles.badgeAvailable : styles.badgeFull]}>
-                    <Ionicons name={route.available_seats > 0 ? 'checkmark-circle' : 'close-circle'} size={12} color={route.available_seats > 0 ? COLORS.success : COLORS.error} />
-                    <Text style={styles.routeCardBadgeText}>
-                      {route.available_seats > 0 ? 'Disponible' : 'Lleno'}
-                    </Text>
-                  </View>
-
-                  {route.vehicle_type && (
-                    <View style={styles.routeCardType}>
-                      <Text style={styles.routeCardTypeText}>{route.vehicle_type}</Text>
-                    </View>
-                  )}
-
-                  {/* Route Section */}
-                  <View style={styles.routeCardRouteSection}>
-                    <View style={styles.routeCardOrigin}>
-                      <View style={styles.routeCardLocationIcon}>
-                      <Ionicons name="location" size={18} color={COLORS.primary} />
-                      </View>
-                      <View style={styles.routeCardLocationText}>
-                        <Text style={styles.routeCardLocationLabel}>SALIDA</Text>
-                        <Text style={styles.routeCardLocationName}>{route.origin}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.routeCardArrow}>
-                      <Ionicons name="arrow-forward" size={16} color={COLORS.textSecondary} />
-                    </View>
-
-                    <View style={styles.routeCardDestination}>
-                      <View style={styles.routeCardLocationIcon}>
-                      <Ionicons name="location" size={18} color={COLORS.error} />
-                      </View>
-                      <View style={styles.routeCardLocationText}>
-                        <Text style={styles.routeCardLocationLabel}>DESTINO</Text>
-                        <Text style={styles.routeCardLocationName}>{route.destination}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Footer with Details */}
-                  <View style={styles.routeCardFooterSection}>
-                    <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
-                      <Text style={styles.routeCardFooterText}>
-                        {formatTime(route.departure_time, route.arrival_time)}
-                      </Text>
-                    </View>
-                    <View style={styles.routeCardFooterDivider} />
-                    <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-                      <Text style={styles.routeCardFooterText}>
-                        {new Date(route.departure_time).toLocaleDateString('es-CO', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                    </View>
-                    <View style={styles.routeCardFooterDivider} />
-                    <View style={styles.routeCardFooterItem}>
-                      <Ionicons name="cash-outline" size={14} color={COLORS.textSecondary} />
-                      <Text style={styles.routeCardFooterText}>{formatPrice(route.price_per_seat)}</Text>
-                    </View>
-                  </View>
-
-                  {/* Driver & Vehicle Info */}
-                  <View style={styles.driverVehicleSection}>
-                    <View style={styles.driverVehicleRow}>
-                      <View style={styles.driverVehicleItem}>
-                        <Ionicons name="person" size={14} color={COLORS.primary} />
-                        <Text style={styles.driverVehicleLabel}>Conductor:</Text>
-                        <Text style={styles.driverVehicleValue}>{route.driver_name || 'N/A'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.driverVehicleRow}>
-                      <View style={styles.driverVehicleItem}>
-                        <Ionicons name="car-outline" size={14} color={COLORS.primary} />
-                        <Text style={styles.driverVehicleLabel}>Placa:</Text>
-                        <Text style={styles.driverVehicleValue}>{route.vehicle_plate || 'N/A'}</Text>
-                      </View>
-                      <View style={styles.driverVehicleItem}>
-                        <Ionicons name="car" size={14} color={COLORS.primary} />
-                        <Text style={styles.driverVehicleLabel}>Color:</Text>
-                        <Text style={styles.driverVehicleValue}>{route.vehicle_color || 'N/A'}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Availability Badge + CTA */}
-                <View style={styles.routeCardBottom}>
-                  <View
-                    style={[
-                      styles.routeCardAvailability,
-                      route.available_seats === 0
-                        ? styles.availabilityFull
-                        : route.available_seats <= 2
-                        ? styles.availabilityLow
-                        : styles.availabilityOk,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.availabilityText,
-                        route.available_seats === 0
-                          ? styles.availabilityTextFull
-                          : route.available_seats <= 2
-                          ? styles.availabilityTextLow
-                          : styles.availabilityTextOk,
-                      ]}
-                    >
-                      {route.available_seats === 0
-                        ? '🔴 Lleno'
-                        : `🟢 ${route.available_seats} ${route.available_seats === 1 ? 'puesto' : 'puestos'}`}
-                    </Text>
-                  </View>
-
-                  <View style={styles.routeCardCTA}>
-                    <Text style={styles.routeCardCTAText}>Ver detalles</Text>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-                  </View>
-                </View>
-              </TouchableOpacity>
+                route={route}
+                onPress={handleSelectRoute}
+                formatTime={formatTime}
+                formatPrice={formatPrice}
+              />
             ))}
           </View>
         )}

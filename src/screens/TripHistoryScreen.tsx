@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native'
+import React from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
@@ -23,11 +25,26 @@ export default function TripHistoryScreen() {
     message: '',
     type: 'info' as 'success' | 'error' | 'info' | 'warning',
   })
+  const [refreshing, setRefreshing] = useState(false)
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true)
+    await loadTripHistory()
+    setRefreshing(false)
+  }, [user])
 
   useEffect(() => {
     if (!user) return
     loadTripHistory()
   }, [user])
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadTripHistory()
+      }
+    }, [user])
+  )
 
   const loadTripHistory = async () => {
     try {
@@ -427,10 +444,27 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xl,
+  },
+  skeletonCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.sm,
+  },
+  skeletonHeader: {
+    height: 20,
+    backgroundColor: '#E5E7EB',
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
+  },
+  skeletonLine: {
+    height: 14,
+    backgroundColor: '#F3F4F6',
+    borderRadius: RADIUS.sm,
+    marginBottom: SPACING.sm,
   },
   emptyContainer: {
     flex: 1,
@@ -448,6 +482,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.lg,
     ...SHADOWS.sm,
+  },
+  emptyGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyTitle: {
     ...TYPOGRAPHY.h4,
@@ -476,13 +517,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tripCard: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     ...SHADOWS.md,
     borderWidth: 1,
-    borderColor: COLORS.primaryDark,
+    borderColor: '#E5E7EB',
   },
   tripHeader: {
     flexDirection: 'row',
@@ -510,7 +551,7 @@ const styles = StyleSheet.create({
   },
   tripDate: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textInverse + 'CC',
+    color: COLORS.textSecondary,
   },
   routeRow: {
     flexDirection: 'row',
@@ -533,7 +574,7 @@ const styles = StyleSheet.create({
   },
   routeText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: COLORS.textPrimary,
     fontWeight: '600',
   },
   routeArrow: {
@@ -551,7 +592,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textInverse + 'DD',
+    color: COLORS.textSecondary,
   },
   tripFooter: {
     flexDirection: 'row',
@@ -566,7 +607,7 @@ const styles = StyleSheet.create({
   },
   driverText: {
     ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textInverse + 'DD',
+    color: COLORS.textSecondary,
   },
   ratingBadge: {
     flexDirection: 'row',
@@ -586,15 +627,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.warning,
+    ...SHADOWS.sm,
   },
   rateBtnText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: COLORS.primary,
-    fontWeight: '600',
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textInverse,
+    fontWeight: '700',
   },
   repeatBtn: {
     flexDirection: 'row',
