@@ -9,7 +9,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useProfile } from '../hooks/useProfile'
 import { useAuth } from '../hooks/useAuth'
 import Toast from '../components/Toast'
-import { uploadProfilePhoto, uploadVehiclePhoto, getVehiclePhotoUrl } from '../services/photoUpload'
+import { uploadProfilePhoto, uploadVehiclePhoto } from '../services/photoUpload'
 
 export default function ProfileScreen() {
   const navigation = useNavigation()
@@ -25,25 +25,12 @@ export default function ProfileScreen() {
   const [toastVisible, setToastVisible] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success')
-  const [vehiclePhotoUrl, setVehiclePhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (profile?.role) {
       setIsDriver(profile.role === 'driver')
     }
   }, [profile?.role])
-
-  const loadVehiclePhoto = async () => {
-    if (!user?.id || !isDriver) return
-    const photoUrl = await getVehiclePhotoUrl(user.id)
-    setVehiclePhotoUrl(photoUrl)
-  }
-
-  useEffect(() => {
-    if (isDriver) {
-      loadVehiclePhoto()
-    }
-  }, [user?.id, isDriver])
 
   // Ejecutar logout cuando shouldLogout sea true
   useEffect(() => {
@@ -184,9 +171,8 @@ export default function ProfileScreen() {
         try {
           const photoUrl = await uploadVehiclePhoto(user.id, null, result.assets[0].uri)
           console.log('Received vehicle photo URL:', photoUrl)
-          setVehiclePhotoUrl(photoUrl)
+          // ✅ Recargar profile para obtener vehicle_photo_url actualizada
           await fetchProfile(user.id)
-          await loadVehiclePhoto()
 
           setToastMessage('Foto del vehículo actualizada')
           setToastType('success')
@@ -474,17 +460,17 @@ export default function ProfileScreen() {
               <View style={styles.vehiclePhotoLoading}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
               </View>
-            ) : vehiclePhotoUrl ? (
+            ) : profile?.vehicle_photo_url ? (
               <>
                 <Image 
-                  source={{ uri: vehiclePhotoUrl }}
+                  source={{ uri: profile.vehicle_photo_url }}
                   style={styles.vehiclePhotoImage}
                   onError={(error) => {
                     console.error('Vehicle photo load error:', error)
                     setVehiclePhotoError(true)
                   }}
                   onLoad={() => {
-                    console.log('Vehicle photo loaded:', vehiclePhotoUrl)
+                    console.log('Vehicle photo loaded:', profile.vehicle_photo_url)
                     setVehiclePhotoError(false)
                   }}
                 />

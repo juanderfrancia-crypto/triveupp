@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
@@ -55,6 +56,15 @@ export default function ActiveTripsScreen() {
     }
   }, [user?.id])
 
+  // Recargar viajes cada vez que la pantalla se enfoca
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        loadActiveTrips()
+      }
+    }, [user?.id])
+  )
+
   const loadActiveTrips = async () => {
     try {
       setLoading(true)
@@ -63,12 +73,13 @@ export default function ActiveTripsScreen() {
         return
       }
 
-      // Obtener bookings confirmados del pasajero con información de rutas
+      // Obtener bookings CONFIRMADOS del pasajero (viajes en los que ya reservó asientos)
       const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
         .select(
           `
           id,
+          booking_status,
           route_id,
           seat_number,
           price,
@@ -100,16 +111,37 @@ export default function ActiveTripsScreen() {
 
       if (bookingsError) throw bookingsError
 
+      console.log('📍 ActiveTripsScreen - Bookings obtenidos:', {
+        count: bookings?.length || 0,
+        bookings: bookings?.map(b => ({
+          id: b.id,
+          status: b.booking_status,
+          hasRoute: !!b.routes,
+          routeStatus: b.routes?.status,
+        }))
+      })
+
       if (!bookings || bookings.length === 0) {
+        console.log('❌ No hay bookings para este usuario')
         setActiveTrips([])
         return
       }
 
-      // Filtrar solo viajes que están scheduled o in_progress (no completados/cancelados)
+      // Mostrar SOLO viajes que NO están completados o cancelados
+      // Filtrar: ruta existe + status de ruta es activo + booking no está cancelado
       const formattedTrips: ActiveTrip[] = (bookings as any[])
         .filter((b) => {
           const route = b.routes
-          return route && ['scheduled', 'in_progress'].includes(route.status)
+          const bookingStatus = b.booking_status
+          // Mostrar si: 
+          // 1. La ruta existe
+          // 2. La ruta NO está completed o cancelled
+          // 3. El booking NO está cancelled
+          return (
+            route && 
+            !['completed', 'cancelled'].includes(route.status) &&
+            bookingStatus !== 'cancelled'
+          )
         })
         .map((booking: any) => {
           const route = booking.routes
@@ -143,8 +175,17 @@ export default function ActiveTripsScreen() {
         })
 
       setActiveTrips(formattedTrips)
+
+      console.log('✅ Viajes activos finales:', {
+        count: formattedTrips.length,
+        trips: formattedTrips.map(t => ({
+          id: t.id,
+          route: `${t.origin} → ${t.destination}`,
+          status: t.routeStatus,
+        }))
+      })
     } catch (error) {
-      console.error('Error loading active trips:', error)
+      console.error('❌ Error loading active trips:', error)
       setToastConfig({
         visible: true,
         message: 'Error cargando viajes activos',
@@ -360,13 +401,11 @@ export default function ActiveTripsScreen() {
           style={styles.container}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            require('react-native').RefreshControl ? (
-              new (require('react-native').RefreshControl)({
-                refreshing,
-                onRefresh: handleRefresh,
-                tintColor: COLORS.primary,
-              })
-            ) : undefined
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
           }
         >
           <View style={styles.emptyContainer}>

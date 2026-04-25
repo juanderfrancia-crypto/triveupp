@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAvailableRides } from '../hooks/useAvailableRides'
@@ -23,6 +23,14 @@ export default function AvailableRidesScreen() {
   const { rides, loading, error, refetch } = useAvailableRides()
   const { setSelectedRoute, authUser } = useAppStore()
   const [refreshing, setRefreshing] = useState(false)
+
+  // 🔄 Refetch whenever the screen is focused (e.g., returning from SeatSelection)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📍 AvailableRidesScreen focused - refetching rides...')
+      refetch()
+    }, [refetch])
+  )
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)

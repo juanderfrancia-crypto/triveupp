@@ -20,17 +20,19 @@ export default function SeatSelectionScreen() {
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [initialLoading, setInitialLoading] = useState(true)
 
-  const loadBookings = useCallback(async () => {
+  const loadBookings = useCallback(async (skipValidation = false) => {
     if (!selectedRoute?.id) return
     if (!authUser) {
-      errorHandler.handle(
-        'Debes iniciar sesión para ver los asientos disponibles',
-        ErrorType.AUTH,
-        ErrorSeverity.MEDIUM,
-        true,
-        { context: 'seat_selection_not_authenticated' }
-      )
-      setTimeout(() => navigation.navigate('Login' as never), 1500)
+      if (!skipValidation) {
+        errorHandler.handle(
+          'Debes iniciar sesión para ver los asientos disponibles',
+          ErrorType.AUTH,
+          ErrorSeverity.MEDIUM,
+          true,
+          { context: 'seat_selection_not_authenticated' }
+        )
+        setTimeout(() => navigation.navigate('Login' as never), 1500)
+      }
       return
     }
 
@@ -39,26 +41,30 @@ export default function SeatSelectionScreen() {
 
       const currentRoute = await getRouteById(selectedRoute.id)
       if (!currentRoute) {
-        errorHandler.handle(
-          'Esta ruta ya no está disponible',
-          ErrorType.VALIDATION,
-          ErrorSeverity.MEDIUM,
-          true,
-          { context: 'route_not_found', route_id: selectedRoute.id }
-        )
-        setTimeout(() => navigation.goBack(), 1500)
+        if (!skipValidation) {
+          errorHandler.handle(
+            'Esta ruta ya no está disponible',
+            ErrorType.VALIDATION,
+            ErrorSeverity.MEDIUM,
+            true,
+            { context: 'route_not_found', route_id: selectedRoute.id }
+          )
+          setTimeout(() => navigation.goBack(), 1500)
+        }
         return
       }
 
       if (currentRoute.status !== 'scheduled') {
-        errorHandler.handle(
-          'Esta ruta ya no está disponible para reservas. Por favor selecciona otra.',
-          ErrorType.VALIDATION,
-          ErrorSeverity.MEDIUM,
-          true,
-          { context: 'route_not_scheduled', route_id: selectedRoute.id, status: currentRoute.status }
-        )
-        setTimeout(() => navigation.goBack(), 1500)
+        if (!skipValidation) {
+          errorHandler.handle(
+            'Esta ruta ya no está disponible para reservas. Por favor selecciona otra.',
+            ErrorType.VALIDATION,
+            ErrorSeverity.MEDIUM,
+            true,
+            { context: 'route_not_scheduled', route_id: selectedRoute.id, status: currentRoute.status }
+          )
+          setTimeout(() => navigation.goBack(), 1500)
+        }
         return
       }
 
@@ -128,7 +134,8 @@ export default function SeatSelectionScreen() {
     useCallback(() => {
       if (!selectedRoute?.id || !authUser) return
 
-      loadBookings()
+      // Cuando la pantalla gana foco, cargar sin validaciones agresivas
+      loadBookings(true)
       return () => {}
     }, [loadBookings, selectedRoute?.id, authUser])
   )

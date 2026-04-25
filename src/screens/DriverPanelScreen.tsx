@@ -85,29 +85,46 @@ export default function DriverPanelScreen() {
               booking_status,
               created_at,
               dropoff_point,
-              dropoff_point_custom,
-              profiles:passenger_id(id, name, email, phone)
+              dropoff_point_custom
             `)
             .eq('route_id', route.id)
-            .eq('booking_status', 'confirmed')
+            .in('booking_status', ['confirmed', 'completed'])
             .order('seat_number', { ascending: true })
 
           if (bookingsError) {
-            console.error('Error loading bookings:', bookingsError)
+            console.error('Error loading bookings for route', route.id, ':', bookingsError)
+            return { ...route, passengers: [] }
           }
 
-          const passengers: Passenger[] = (bookings || []).map((b: any) => ({
-            booking_id: b.id,
-            passenger_id: b.passenger_id,
-            name: b.profiles?.name || 'Pasajero',
-            email: b.profiles?.email || '',
-            phone: b.profiles?.phone || '',
-            seat_number: b.seat_number,
-            booking_status: b.booking_status,
-            created_at: b.created_at,
-            dropoff_point: b.dropoff_point || route.destination,
-            dropoff_point_custom: b.dropoff_point_custom || false,
-          }))
+          // Obtener información de perfiles para pasajeros si hay bookings
+          let passengers: Passenger[] = []
+          if (bookings && bookings.length > 0) {
+            const passengerIds = bookings.map((b: any) => b.passenger_id)
+            const { data: profiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select('id, name, email, phone')
+              .in('id', passengerIds)
+
+            const profileMap = new Map(
+              (profiles || []).map((p: any) => [p.id, p])
+            )
+
+            passengers = bookings.map((b: any) => {
+              const profile = profileMap.get(b.passenger_id)
+              return {
+                booking_id: b.id,
+                passenger_id: b.passenger_id,
+                name: profile?.name || `Pasajero ${b.seat_number}`,
+                email: profile?.email || '',
+                phone: profile?.phone || '',
+                seat_number: b.seat_number,
+                booking_status: b.booking_status,
+                created_at: b.created_at,
+                dropoff_point: b.dropoff_point || route.destination,
+                dropoff_point_custom: b.dropoff_point_custom || false,
+              }
+            })
+          }
 
           return { ...route, passengers }
         })
@@ -218,20 +235,35 @@ export default function DriverPanelScreen() {
       if (newStatus === 'cancelled') {
         const route = routes.find((routeItem) => routeItem.id === routeId)
         if (route && user?.id) {
-          // Obtener pasajeros con push tokens
+          // Obtener passenger_ids confirmados para esta ruta
           const { data: bookings } = await supabase
             .from('bookings')
-            .select(`
-              passenger_id,
-              profiles:passenger_id(push_token)
-            `)
+            .select('passenger_id')
             .eq('route_id', routeId)
             .eq('booking_status', 'confirmed')
 
-          const passengers = (bookings || []).map((b: any) => ({
-            passenger_id: b.passenger_id,
-            push_token: b.profiles?.push_token,
-          }))
+          // Si hay pasajeros, obtener sus push tokens
+          const passengers = []
+          if (bookings && bookings.length > 0) {
+            const passengerIds = bookings.map((b: any) => b.passenger_id)
+            
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, push_token')
+              .in('id', passengerIds)
+
+            const profileMap = new Map(
+              (profiles || []).map((p: any) => [p.id, p])
+            )
+
+            passengerIds.forEach((passengerId: string) => {
+              const profile = profileMap.get(passengerId)
+              passengers.push({
+                passenger_id: passengerId,
+                push_token: profile?.push_token,
+              })
+            })
+          }
 
           // Notificar sin esperar respuesta
           notifyRouteCancellation(

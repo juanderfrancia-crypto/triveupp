@@ -280,7 +280,11 @@ export const useBookings = () => {
 
       await cleanupExpiredPendingBookings(routeId);
 
-      let query = supabase.from("bookings").select(`*, profiles:passenger_id(id, name)`).eq("route_id", routeId);
+      // ✅ Simplificar la consulta: solo obtener bookings sin JOIN a profiles
+      let query = supabase
+        .from("bookings")
+        .select("id, route_id, passenger_id, seat_number, booking_status, created_at, payment_status, dropoff_point, dropoff_point_custom")
+        .eq("route_id", routeId);
 
       if (includePending) {
         // Include any booking that is not cancelled so seat availability matches DB constraints.
@@ -292,10 +296,11 @@ export const useBookings = () => {
       const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
-      return data;
+      return data || [];
     } catch (err: any) {
       const message = err.message || "Error fetching route bookings";
       setError(message);
+      console.error('Error in getRouteBookings:', message);
       throw err;
     } finally {
       setLoading(false);

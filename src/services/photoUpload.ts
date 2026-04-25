@@ -252,6 +252,22 @@ export async function uploadVehiclePhoto(
       }
     }
 
+    // ✅ NUEVO: Guardar vehicle_photo_url en profiles (para caching)
+    try {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ vehicle_photo_url: photoUrl })
+        .eq('id', driverId)
+
+      if (profileError) {
+        console.warn('Error updating profile vehicle photo URL:', profileError)
+      } else {
+        console.log('Profile vehicle_photo_url updated successfully')
+      }
+    } catch (profileErr) {
+      console.warn('Error saving profile vehicle photo URL:', profileErr)
+    }
+
     return photoUrl
   } catch (error) {
     console.error('Error uploading vehicle photo:', error)

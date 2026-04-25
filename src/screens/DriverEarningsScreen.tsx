@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -9,89 +9,60 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { formatCOP } from '../utils/currency'
-
-interface EarningsData {
-  totalEarnings: number
-  thisMonthEarnings: number
-  pendingAmount: number
-  completedTrips: number
-  averagePerTrip: number
-  totalRideHours: number
-}
+import { useDriverEarnings } from '../hooks/useDriverEarnings'
 
 interface Transaction {
   id: string
   date: string
-  type: 'trip' | 'withdrawal' | 'bonus'
+  type: 'trip' | 'withdrawal' | 'bonus' | 'refund'
   amount: number
   description: string
   tripId?: string
+  bookingId?: string
+  status: 'completed' | 'pending' | 'failed'
 }
 
 export default function DriverEarningsScreen() {
   const navigation = useNavigation<any>()
   const { user } = useAppStore()
-  const [loading, setLoading] = useState(true)
-  const [earnings, setEarnings] = useState<EarningsData>({
-    totalEarnings: 4250000,
-    thisMonthEarnings: 1850000,
-    pendingAmount: 250000,
-    completedTrips: 45,
-    averagePerTrip: 94444,
-    totalRideHours: 78,
-  })
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: '1',
-      date: '2026-04-06',
-      type: 'trip',
-      amount: 45000,
-      description: 'Viaje Bogotá - Medellín',
-      tripId: 'trip-001',
-    },
-    {
-      id: '2',
-      date: '2026-04-05',
-      type: 'trip',
-      amount: 38000,
-      description: 'Viaje Cali - Palmira',
-      tripId: 'trip-002',
-    },
-    {
-      id: '3',
-      date: '2026-04-04',
-      type: 'bonus',
-      amount: 25000,
-      description: 'Bonificación por 4 viajes',
-    },
-    {
-      id: '4',
-      date: '2026-04-03',
-      type: 'trip',
-      amount: 42000,
-      description: 'Viaje Puerto Tejada - Cali',
-      tripId: 'trip-003',
-    },
-    {
-      id: '5',
-      date: '2026-04-02',
-      type: 'withdrawal',
-      amount: -500000,
-      description: 'Retiro a cuenta bancaria',
-    },
-  ])
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('month')
 
-  useEffect(() => {
-    // In a real app, fetch earnings data from backend
-    setLoading(false)
-  }, [])
+  // ✅ USAR HOOK REAL PARA GANANCIAS
+  const {
+    earnings,
+    transactions: earningsTransactions,
+    loading,
+    error,
+    loadEarnings,
+  } = useDriverEarnings(user?.id)
 
+  // Recargar ganancias cuando la pantalla recibe enfoque
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        loadEarnings()
+      }
+    }, [user?.id, loadEarnings])
+  )
+
+  // Convertir transacciones del hook a formato de pantalla
+  const transactions: Transaction[] = earningsTransactions.map((t) => ({
+    id: t.id,
+    date: t.date,
+    type: t.type,
+    amount: t.amount,
+    description: t.description,
+    tripId: t.tripId,
+    bookingId: t.bookingId,
+    status: t.status,
+  }))
+
+  // Funciones helper para iconos y colores de transacciones
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case 'trip':
@@ -100,6 +71,8 @@ export default function DriverEarningsScreen() {
         return 'arrow-down-circle-outline'
       case 'bonus':
         return 'gift-outline'
+      case 'refund':
+        return 'return-up-back-outline'
       default:
         return 'wallet-outline'
     }
@@ -113,8 +86,10 @@ export default function DriverEarningsScreen() {
         return COLORS.error
       case 'bonus':
         return COLORS.warning
-      default:
+      case 'refund':
         return COLORS.primary
+      default:
+        return COLORS.textSecondary
     }
   }
 
@@ -123,6 +98,24 @@ export default function DriverEarningsScreen() {
       <SafeAreaView style={styles.container}>
         <View style={[styles.container, styles.centered]}>
           <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.container, styles.centered]}>
+          <Ionicons name="warning" size={48} color={COLORS.error} />
+          <Text style={styles.errorText}>Error al cargar ganancias</Text>
+          <Text style={styles.errorSubtext}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => loadEarnings()}
+          >
+            <Text style={styles.retryBtnText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     )
@@ -211,7 +204,7 @@ export default function DriverEarningsScreen() {
           <View style={styles.balanceTop}>
             <View>
               <Text style={styles.balanceLabel}>Ganancias Totales</Text>
-              <Text style={styles.balanceAmount}>{formatCOP(earnings.totalEarnings)}</Text>
+              <Text style={styles.balanceAmount}>{formatCOP(earnings?.totalEarnings || 0)}</Text>
             </View>
             <View style={styles.walletIcon}>
               <Ionicons name="wallet" size={40} color="#fff" />
@@ -223,12 +216,12 @@ export default function DriverEarningsScreen() {
           <View style={styles.balanceBottom}>
             <View style={styles.balanceItem}>
               <Text style={styles.balanceItemLabel}>Este Mes</Text>
-              <Text style={styles.balanceItemValue}>{formatCOP(earnings.thisMonthEarnings)}</Text>
+              <Text style={styles.balanceItemValue}>{formatCOP(earnings?.thisMonthEarnings || 0)}</Text>
             </View>
             <View style={styles.balanceItemDivider} />
             <View style={styles.balanceItem}>
               <Text style={styles.balanceItemLabel}>Pendiente</Text>
-              <Text style={styles.balanceItemValue}>{formatCOP(earnings.pendingAmount)}</Text>
+              <Text style={styles.balanceItemValue}>{formatCOP(earnings?.pendingAmount || 0)}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -239,7 +232,7 @@ export default function DriverEarningsScreen() {
             <View style={styles.statIcon}>
               <Ionicons name="car-outline" size={24} color={COLORS.primary} />
             </View>
-            <Text style={styles.statValue}>{earnings.completedTrips}</Text>
+            <Text style={styles.statValue}>{earnings?.completedTrips || 0}</Text>
             <Text style={styles.statLabel}>Viajes</Text>
           </View>
 
@@ -247,7 +240,7 @@ export default function DriverEarningsScreen() {
             <View style={styles.statIcon}>
               <Ionicons name="cash-outline" size={24} color={COLORS.primary} />
             </View>
-            <Text style={styles.statValue}>{formatCOP(earnings.averagePerTrip)}</Text>
+            <Text style={styles.statValue}>{formatCOP(earnings?.averagePerTrip || 0)}</Text>
             <Text style={styles.statLabel}>Por Viaje</Text>
           </View>
 
@@ -255,7 +248,7 @@ export default function DriverEarningsScreen() {
             <View style={styles.statIcon}>
               <Ionicons name="time-outline" size={24} color={COLORS.primary} />
             </View>
-            <Text style={styles.statValue}>{earnings.totalRideHours}h</Text>
+            <Text style={styles.statValue}>{earnings?.totalRideHours || 0}h</Text>
             <Text style={styles.statLabel}>Conducción</Text>
           </View>
         </View>

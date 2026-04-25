@@ -79,43 +79,70 @@ export const useAvailableRides = () => {
     }
   }, [])
 
-  // Setup realtime subscription
+  // Setup realtime subscription + polling
   useEffect(() => {
     // Fetch initial data
     fetchAvailableRides()
 
-    // Subscribe to changes on routes table
-    // (booking changes affect available_seats, which triggers route updates)
-    const channel = supabase
-      .channel('available-rides-changes')
+    // 🔔 REALTIME: Listen to BOOKING changes (key to instant updates)
+    // When someone books a seat, we need to refetch available rides
+    const bookingChannel = supabase
+      .channel('available-rides-bookings')
       .on(
         'postgres_changes',
         {
-          event: '*', // Any change
+          event: '*', // INSERT, UPDATE, DELETE
           schema: 'public',
-          table: 'routes',
-          filter: `status=eq.scheduled`, // Only scheduled routes
+          table: 'bookings', // ← KEY CHANGE: Listen to BOOKINGS not ROUTES
         },
         (payload) => {
-          console.log('Route change detected:', payload)
-          // Refetch when routes table changes
+          console.log('📍 Booking change detected, refetching rides...', payload.eventType)
+          // Refetch immediately when booking changes
+          setTimeout(() => fetchAvailableRides(), 500) // Small delay to let trigger complete
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime channel error for bookings')
+        }
+      })
+
+    // 🔔 REALTIME: Also listen to ROUTE changes (for driver updates)
+    const routeChannel = supabase
+      .channel('available-rides-routes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE', // Only updates, not inserts/deletes
+          schema: 'public',
+          table: 'routes',
+          filter: `status=eq.scheduled`,
+        },
+        (payload) => {
+          console.log('🚗 Route change detected, refetching rides...', payload.new)
           fetchAvailableRides()
         },
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
-          console.error('Realtime channel error')
-          setError('Realtime connection error')
+          console.error('❌ Realtime channel error for routes')
         }
       })
 
-    setSubscription(channel)
+    // ⏰ POLLING: Fallback poll every 3 seconds for instant updates
+    // (realtime can have slight delays, this ensures consistency)
+    const pollingInterval = setInterval(() => {
+      console.log('⏱️ Polling available rides...')
+      fetchAvailableRides()
+    }, 3000)
+
+    setSubscription(bookingChannel)
 
     // Cleanup
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel)
-      }
+      if (bookingChannel) supabase.removeChannel(bookingChannel)
+      if (routeChannel) supabase.removeChannel(routeChannel)
+      clearInterval(pollingInterval)
     }
   }, [fetchAvailableRides])
 
