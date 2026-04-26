@@ -26,7 +26,7 @@ import { ChatHeader } from '../components/ChatHeader'
 import { SearchBar } from '../components/SearchBar'
 import { EmojiPicker } from '../components/EmojiPicker'
 import { MessageInput } from '../components/MessageInput'
-import { sendAudioMessage, markAsRead, markAudioAsListened, deleteMessage, sendReplyMessage, pinMessage, unpinMessage, getPinnedMessages, editMessage, archiveConversation, getArchivedConversations, getArchivedConversationsDetailed, deleteArchivedConversationPermanently, unarchiveConversation } from '../services/messages'
+import { sendAudioMessage, markAsRead, markAudioAsListened, deleteMessage, sendReplyMessage, pinMessage, unpinMessage, getPinnedMessages, editMessage, archiveConversation, getArchivedConversations, getArchivedConversationsDetailed, deleteArchivedConversationPermanently, unarchiveConversation, sendTypingIndicator } from '../services/messages'
 import { useRoute } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { ReplyBubble } from '../components/ReplyBubble'
@@ -41,9 +41,11 @@ type ChatMessageRowProps = {
   onEditMessage: (message: any) => void
   onPinMessage: (messageId: string) => void
   onUnpinMessage: (messageId: string) => void
+  onReactMessage: (messageId: string, emoji: string) => void
+  reactionsMap?: Map<string, Array<{ emoji: string; count: number; userReacted: boolean }>>
 }
 
-const ChatMessageRow = React.memo(({ item, userId, onCopyMessage, onDeleteMessage, onReplyMessage, onEditMessage, onPinMessage, onUnpinMessage }: ChatMessageRowProps) => {
+const ChatMessageRow = React.memo(({ item, userId, onCopyMessage, onDeleteMessage, onReplyMessage, onEditMessage, onPinMessage, onUnpinMessage, onReactMessage, reactionsMap }: ChatMessageRowProps) => {
   const showDateSeparator = item.showDateSeparator === true
 
   const handleAudioPlay = useCallback(() => {
@@ -60,6 +62,9 @@ const ChatMessageRow = React.memo(({ item, userId, onCopyMessage, onDeleteMessag
   const handleEdit = useCallback(() => onEditMessage(item), [onEditMessage, item.id])
   const handlePin = useCallback(() => onPinMessage(item.id), [onPinMessage, item.id])
   const handleUnpin = useCallback(() => onUnpinMessage(item.id), [onUnpinMessage, item.id])
+  const handleReact = useCallback((emoji: string) => onReactMessage(item.id, emoji), [onReactMessage, item.id])
+
+  const reactions = reactionsMap?.get(item.id) || []
 
   return (
     <View>
@@ -82,6 +87,9 @@ const ChatMessageRow = React.memo(({ item, userId, onCopyMessage, onDeleteMessag
         onEdit={handleEdit}
         onPin={handlePin}
         onUnpin={handleUnpin}
+        reactions={reactions}
+        currentUserId={userId}
+        onReact={handleReact}
       />
     </View>
   )
@@ -127,6 +135,7 @@ const ChatScreen = ({ navigation }: any) => {
     error,
     deleteChat,
     setCurrentOtherUserId,
+    otherUserTyping,
   } = useChat(user?.id)
   const { isRecording, startRecording, stopRecording, cancelRecording } = useAudioRecorder()
   
@@ -137,7 +146,6 @@ const ChatScreen = ({ navigation }: any) => {
   const [showSearch, setShowSearch] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [otherUserTyping, setOtherUserTyping] = useState(false) // Se actualiza cuando el otro usuario escribe (via WebSocket)
   const [showEmojiPickerMain, setShowEmojiPickerMain] = useState(false)
   const [scrollToBottom, setScrollToBottom] = useState(true)
   const [replyingTo, setReplyingTo] = useState<any>(null)
@@ -151,7 +159,68 @@ const ChatScreen = ({ navigation }: any) => {
   const toastTimeoutRef = useRef<NodeJS.Timeout>(null!)
   const isDeletingRef = useRef(false) // Flag para prevenir re-archiving durante delete
   const flatListRef = useRef<FlatList>(null)
-  const typingTimeoutRef = useRef<NodeJS.Timeout>(null!)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | number>(0)
+  const reactionsMapRef = useRef<Map<string, Array<{ emoji: string; count: number; userReacted: boolean }>>>(new Map())
+
+  // ============================================================================
+  // CARGAR REACCIONES DE MENSAJES
+  // ============================================================================
+  const loadReactionsForMessages = useCallback(async (messageIds: string[]) => {
+    if (!user?.id || messageIds.length === 0) return
+
+    try {
+      const { getReactionsForMessages } = await import('../services/messages')
+      const map = await getReactionsForMessages(messageIds)
+
+      // Convertir a formato para ChatBubble
+      const formattedMap = new Map<string, Array<{ emoji: string; count: number; userReacted: boolean }>>()
+      map.forEach((reactions, messageId) => {
+        const emojiCounts = new Map<string, number>()
+        for (const r of reactions) {
+          emojiCounts.set(r.emoji, (emojiCounts.get(r.emoji) || 0) + 1)
+        }
+        formattedMap.set(messageId, Array.from(emojiCounts.entries()).map(([emoji, count]) => ({
+          emoji,
+          count,
+          userReacted: reactions.some(r => r.user_id === user.id),
+        })))
+      })
+
+      reactionsMapRef.current = formattedMap
+    } catch (err) {
+      console.error('Error loading reactions:', err)
+    }
+  }, [user?.id])
+
+  // ============================================================================
+  // HANDLER PARA REACCIONAR A UN MENSAJE
+  // ============================================================================
+  const handleReactMessage = useCallback(async (messageId: string, emoji: string) => {
+    if (!user?.id) return
+
+    try {
+      const { addReaction, removeReaction } = await import('../services/messages')
+
+      // Verificar si el usuario ya reaccionó con este emoji
+      const currentReactions = reactionsMapRef.current.get(messageId) || []
+      const userReacted = currentReactions.some(r => r.emoji === emoji && r.userReacted)
+
+      if (userReacted) {
+        await removeReaction(messageId, user.id, emoji)
+      } else {
+        await addReaction(messageId, user.id, emoji)
+      }
+
+      // Recargar reacciones
+      if (messages.length > 0) {
+        const messageIds = messages.map(m => m.id)
+        await loadReactionsForMessages(messageIds)
+      }
+    } catch (err) {
+      console.error('Error reacting to message:', err)
+      setToastMessage('✗ No se pudo agregar reacción')
+    }
+  }, [user?.id, messages, loadReactionsForMessages])
 
   // Cargar conversación desde parámetros
   useEffect(() => {
@@ -164,6 +233,16 @@ const ChatScreen = ({ navigation }: any) => {
       loadPinnedMessages(otherUserId)
     }
   }, [route.params?.otherUserId])
+
+  // ============================================================================
+  // CARGAR REACCIONES CUANDO SE CARGAN MENSAJES
+  // ============================================================================
+  useEffect(() => {
+    if (messages.length > 0 && user?.id) {
+      const messageIds = messages.map(m => m.id)
+      loadReactionsForMessages(messageIds)
+    }
+  }, [messages.length, user?.id, loadReactionsForMessages])
 
   // Cargar conversaciones archivadas
   useEffect(() => {
@@ -244,13 +323,26 @@ const ChatScreen = ({ navigation }: any) => {
     }
   }, [messages])
 
-  // Simular indicador de escritura (en realidad solo visual, sin real-time)
-  const handleTyping = (text: string) => {
-    setInputText(text)
-    // TODO: Aquí iría lógica para enviar "typing..." event al servidor
-    // Para mostrar cuando OTRA persona escribe, usar WebSocket/Realtime updates
-    // NO mostrar cuando TÚ MISMO escribes
+  // ============================================================================
+// REAL-TIME TYPING INDICATOR
+// ============================================================================
+
+// Simular indicador de escritura (en realidad solo visual, sin real-time)
+const handleTyping = async (text: string) => {
+  setInputText(text)
+  // Enviar typing indicator al otro usuario
+  if (user?.id && currentOtherUserId && text.length > 0) {
+    // Solo enviar cada 3 segundos para no spam
+    if (!typingTimeoutRef.current || typingTimeoutRef.current < Date.now() - 3000) {
+      typingTimeoutRef.current = Date.now()
+      try {
+        await sendTypingIndicator(user.id, currentOtherUserId)
+      } catch (e) {
+        // Ignore typing indicator errors
+      }
+    }
   }
+}
 
   // Enviar mensaje
   const handleSendMessage = async () => {
@@ -412,17 +504,12 @@ const ChatScreen = ({ navigation }: any) => {
           onPress: async () => {
             try {
               setSendingMessage(true)
-              console.log('📁 Archivando conversación con:', otherUserId)
-              console.log('📁 [DEBUG] archivedConversations array ANTES:', archivedConversations)
-              console.log('📁 [DEBUG] isDeletingRef.current:', isDeletingRef.current)
-              
+
               if (user?.id) {
                 await archiveConversation(user.id, otherUserId)
-                
-                // ✅ Usar función de actualización para evitar race conditions
+
                 setArchivedConversations(prevArchived => {
                   if (!prevArchived.includes(otherUserId)) {
-                    console.log('📁 [DEBUG] Agregando a archivadas:', otherUserId)
                     return [...prevArchived, otherUserId]
                   }
                   return prevArchived
@@ -437,7 +524,6 @@ const ChatScreen = ({ navigation }: any) => {
                 }
                 
                 setToastMessage('✓ Conversación archivada')
-                console.log('📁 [DEBUG] archivedConversations array DESPUÉS:', archivedConversations)
               }
             } catch (error: any) {
               console.error('❌ Error al archivar conversación:', error)
@@ -699,9 +785,11 @@ const ChatScreen = ({ navigation }: any) => {
         onEditMessage={handleEditMessage}
         onPinMessage={handlePinMessage}
         onUnpinMessage={handleUnpinMessage}
+        onReactMessage={handleReactMessage}
+        reactionsMap={reactionsMapRef.current}
       />
     )
-  }, [user?.id, handleCopyMessage, handleDeleteMessage, handleReplyMessage, handleEditMessage, handlePinMessage, handleUnpinMessage])
+  }, [user?.id, handleCopyMessage, handleDeleteMessage, handleReplyMessage, handleEditMessage, handlePinMessage, handleUnpinMessage, handleReactMessage])
 
   useEffect(() => {
     if (__DEV__) {

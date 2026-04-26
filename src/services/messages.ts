@@ -866,20 +866,278 @@ export const editMessage = async (
   }
 }
 
-// Obtener un mensaje específico (para reply)
-export const getMessageById = async (messageId: string): Promise<Message | null> => {
+// ============================================================================
+// REACIONES A MENSAJES (emoji reactions)
+// ============================================================================
+
+export interface MessageReaction {
+  id: string
+  message_id: string
+  user_id: string
+  emoji: string
+  created_at: string
+}
+
+export const addReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> => {
   try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single()
+    const { error } = await supabase
+      .from('message_reactions')
+      .upsert({
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+      }, { onConflict: 'message_id,user_id,emoji' })
 
     if (error) throw error
-    return data as Message
+    console.log('✅ Reacción agregada:', emoji, 'en mensaje:', messageId)
   } catch (err: any) {
-    console.error('Error getting message:', err)
-    return null
+    console.error('❌ Error agregando reacción:', err)
+    throw err
+  }
+}
+
+export const removeReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('message_reactions')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji)
+
+    if (error) throw error
+    console.log('🗑️ Reacción eliminada:', emoji, 'de mensaje:', messageId)
+  } catch (err: any) {
+    console.error('❌ Error eliminando reacción:', err)
+    throw err
+  }
+}
+
+export const getMessageReactions = async (
+  messageId: string
+): Promise<MessageReaction[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('*')
+      .eq('message_id', messageId)
+
+    if (error) throw error
+    return data || []
+  } catch (err: any) {
+    console.error('Error getting message reactions:', err)
+    return []
+  }
+}
+
+export const getReactionsForMessages = async (
+  messageIds: string[]
+): Promise<Map<string, MessageReaction[]>> => {
+  try {
+    if (messageIds.length === 0) return new Map()
+
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('*')
+      .in('message_id', messageIds)
+
+    if (error) throw error
+
+    const reactionsMap = new Map<string, MessageReaction[]>()
+    for (const reaction of data || []) {
+      if (!reactionsMap.has(reaction.message_id)) {
+        reactionsMap.set(reaction.message_id, [])
+      }
+      reactionsMap.get(reaction.message_id)!.push(reaction)
+    }
+    return reactionsMap
+  } catch (err: any) {
+    console.error('Error getting reactions for messages:', err)
+    return new Map()
+  }
+}
+
+// ============================================================================
+// INDICADOR DE "ESTÁ ESCRIBIENDO" (Typing indicators)
+// ============================================================================
+
+export const sendTypingIndicator = async (
+  fromUserId: string,
+  toUserId: string
+): Promise<void> => {
+  try {
+    if (!fromUserId || !toUserId) return
+
+    const { error } = await supabase
+      .from('typing_indicators')
+      .upsert({
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'from_user_id,to_user_id' })
+
+    if (error) throw error
+
+    // Auto-limpiar después de 5 segundos (el receptor sabe que dejó de escribir)
+    setTimeout(async () => {
+      try {
+        await supabase
+          .from('typing_indicators')
+          .delete()
+          .eq('from_user_id', fromUserId)
+          .eq('to_user_id', toUserId)
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }, 5000)
+  } catch (err: any) {
+    console.error('Error sending typing indicator:', err)
+    // No throw - typing indicator es secundario
+  }
+}
+
+export const subscribeToTypingIndicator = (
+  userId: string,
+  otherUserId: string,
+  callback: (isTyping: boolean) => void
+) => {
+  const channel = supabase
+    .channel(`typing:${userId}:${otherUserId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'typing_indicators',
+      filter: `from_user_id=eq.${otherUserId}`,
+    }, (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString()
+        callback(new Date(payload.new.created_at) > new Date(fiveSecondsAgo))
+      }
+      if (payload.eventType === 'DELETE') {
+        callback(false)
+      }
+    })
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
+// ============================================================================
+// ESTADO ONLINE/OFFLINE (last_seen en profiles)
+// ============================================================================
+
+export const updateUserOnlineStatus = async (userId: string): Promise<void> => {
+  try {
+    if (!userId) return
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        last_seen: new Date().toISOString(),
+      })
+      .eq('id', userId)
+
+    if (error) throw error
+  } catch (err: any) {
+    console.error('Error updating online status:', err)
+    // No throw - es secundario
+  }
+}
+
+export const subscribeToOnlineStatus = (
+  userId: string,
+  callback: (isOnline: boolean) => void
+) => {
+  const channel = supabase
+    .channel(`online:${userId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'profiles',
+      filter: `id=eq.${userId}`,
+    }, (payload) => {
+      if (payload.new?.last_seen) {
+        const lastSeen = new Date(payload.new.last_seen)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+        callback(lastSeen > fiveMinutesAgo)
+      }
+    })
+    .subscribe()
+
+  // Initial check - assume online if recent
+  callback(true)
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
+// ============================================================================
+// REALTIME: Suscripción a nuevos mensajes entrantes
+// ============================================================================
+
+export const subscribeToNewMessages = (
+  userId: string,
+  otherUserId: string,
+  onNewMessage: (message: Message) => void
+) => {
+  const channel = supabase
+    .channel(`chat:${userId}:${otherUserId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `to_user_id=eq.${userId}`,
+    }, (payload) => {
+      const newMsg = payload.new as Message
+      // Solo notificar si es de la conversación actual
+      if (newMsg.from_user_id === otherUserId) {
+        onNewMessage(newMsg)
+      }
+    })
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
+// ============================================================================
+// REALTIME: Suscripción a cambios en mensajes (edit, delete, reactions)
+// ============================================================================
+
+export const subscribeToMessageChanges = (
+  messageIds: string[],
+  onMessageUpdated: (messageId: string, changes: Partial<Message>) => void
+) => {
+  if (messageIds.length === 0) return () => {}
+
+  const channel = supabase
+    .channel(`message-updates:${messageIds.join(',')}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'messages',
+    }, (payload) => {
+      const updatedMsg = payload.new as Message
+      if (messageIds.includes(updatedMsg.id)) {
+        onMessageUpdated(updatedMsg.id, updatedMsg)
+      }
+    })
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
   }
 }
 

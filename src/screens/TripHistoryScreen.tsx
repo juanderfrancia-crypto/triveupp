@@ -237,8 +237,15 @@ export default function TripHistoryScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+          <View style={styles.content}>
+            {[1, 2, 3].map((idx) => (
+              <View key={idx} style={styles.skeletonCard}>
+                <View style={styles.skeletonHeader} />
+                <View style={styles.skeletonLine} />
+                <View style={[styles.skeletonLine, { width: '80%' }]} />
+                <View style={[styles.skeletonLine, { width: '60%', marginTop: SPACING.md }]} />
+              </View>
+            ))}
           </View>
         ) : filteredTrips.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -267,7 +274,8 @@ export default function TripHistoryScreen() {
           <View style={styles.content}>
             {filteredTrips.map((trip) => (
               <View key={trip.id} style={styles.tripCard}>
-                <View style={styles.tripHeader}>
+                {/* Status Badge & Date */}
+                <View style={styles.tripHeaderRow}>
                   <View
                     style={[
                       styles.statusBadge,
@@ -276,7 +284,7 @@ export default function TripHistoryScreen() {
                   >
                     <Ionicons
                       name={trip.status === 'completed' ? 'checkmark-circle' : 'close-circle'}
-                      size={14}
+                      size={16}
                       color={trip.status === 'completed' ? COLORS.success : COLORS.error}
                     />
                     <Text
@@ -288,67 +296,90 @@ export default function TripHistoryScreen() {
                       {trip.status === 'completed' ? 'Completado' : 'Cancelado'}
                     </Text>
                   </View>
-                  <Text style={styles.tripDate}>{formatDate(trip.date)}</Text>
+                  <Text style={styles.tripDate}>{formatDate(trip.date)} • {trip.time}</Text>
                 </View>
 
-                <View style={styles.routeRow}>
+                {/* Route Section */}
+                <View style={styles.routeSection}>
                   <View style={styles.routePoint}>
                     <View style={styles.routeDot} />
-                    <Text style={styles.routeText}>{trip.origin}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.routeLabel}>Origen</Text>
+                      <Text style={styles.routeValue}>{trip.origin}</Text>
+                    </View>
                   </View>
+                  
                   <View style={styles.routeArrow}>
-                    <Ionicons name="arrow-forward" size={16} color={COLORS.textTertiary} />
+                    <Ionicons name="arrow-forward" size={18} color={COLORS.textTertiary} />
                   </View>
+
                   <View style={styles.routePoint}>
                     <View style={[styles.routeDot, styles.routeDotEnd]} />
-                    <Text style={styles.routeText}>{trip.destination}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.tripDetails}>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.detailText}>{trip.time}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.detailText}>{trip.seats} asiento(s)</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="cash-outline" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.detailText}>${trip.price.toLocaleString('es-CO')}</Text>
-                  </View>
-                </View>
-
-                {trip.status === 'completed' && (
-                  <View style={styles.tripFooter}>
-                    <View style={styles.driverInfo}>
-                      <Ionicons name="person" size={16} color={COLORS.textSecondary} />
-                      <Text style={styles.driverText}>Conductor: {trip.driver}</Text>
-                      {(trip.rating || trip.hasRated) && (
-                        <View style={styles.ratingBadge}>
-                          <Ionicons name="star" size={12} color={COLORS.warning} />
-                          <Text style={styles.ratingText}>
-                            {trip.rating ? trip.rating : 'Calificado'}
-                          </Text>
-                        </View>
-                      )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.routeLabel}>Destino</Text>
+                      <Text style={styles.routeValue}>{trip.destination}</Text>
                     </View>
+                  </View>
+                </View>
+
+                {/* Trip Details Grid */}
+                <View style={styles.detailsGrid}>
+                  <View style={styles.detailCard}>
+                    <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                    <Text style={styles.detailLabel}>Hora</Text>
+                    <Text style={styles.detailValue}>{trip.time}</Text>
+                  </View>
+                  <View style={styles.detailCard}>
+                    <Ionicons name="cash-outline" size={18} color={COLORS.primary} />
+                    <Text style={styles.detailLabel}>Precio</Text>
+                    <Text style={styles.detailValue}>${trip.price.toLocaleString('es-CO')}</Text>
+                  </View>
+                  <View style={styles.detailCard}>
+                    <Ionicons name="person-outline" size={18} color={COLORS.primary} />
+                    <Text style={styles.detailLabel}>Puestos</Text>
+                    <Text style={styles.detailValue}>{trip.seats}</Text>
+                  </View>
+                </View>
+
+                {/* Driver Info Section */}
+                {trip.status === 'completed' && (
+                  <View style={styles.driverSection}>
+                    <View style={styles.driverCard}>
+                      <View style={styles.driverAvatar}>
+                        <Text style={styles.driverAvatarText}>
+                          {trip.driver.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.driverName}>{trip.driver}</Text>
+                        {(trip.rating || trip.hasRated) && (
+                          <View style={styles.ratingBadge}>
+                            <Ionicons name="star" size={12} color={COLORS.warning} />
+                            <Text style={styles.ratingText}>
+                              {trip.rating ? trip.rating.toFixed(1) : 'Calificado'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    
                     {!trip.rating && !trip.hasRated && (
                       <TouchableOpacity
                         style={styles.rateBtn}
                         onPress={() => handleRateTrip(trip)}
                       >
-                        <Ionicons name="star-outline" size={16} color={COLORS.primary} />
+                        <Ionicons name="star" size={18} color="#FFFFFF" />
                         <Text style={styles.rateBtnText}>Calificar</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 )}
 
+                {/* Repeat Button */}
                 <TouchableOpacity
                   style={styles.repeatBtn}
                   onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}
+                  activeOpacity={0.7}
                 >
                   <Ionicons name="repeat" size={18} color={COLORS.primary} />
                   <Text style={styles.repeatBtnText}>Repetir ruta</Text>
@@ -452,10 +483,12 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
-    ...SHADOWS.sm,
+    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   skeletonHeader: {
-    height: 20,
+    height: 24,
     backgroundColor: '#E5E7EB',
     borderRadius: RADIUS.md,
     marginBottom: SPACING.md,
@@ -524,19 +557,19 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    gap: SPACING.md,
   },
-  tripHeader: {
+  tripHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: RADIUS.full,
   },
   statusCompleted: {
@@ -546,96 +579,148 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.error + '15',
   },
   statusText: {
-    ...TYPOGRAPHY.label,
-    fontWeight: '600',
+    ...TYPOGRAPHY.bodyMedium,
+    fontWeight: '700',
   },
   tripDate: {
-    ...TYPOGRAPHY.labelMedium,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
+    fontWeight: '500',
   },
-  routeRow: {
+
+  /* Route Section */
+  routeSection: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    gap: SPACING.sm,
   },
   routePoint: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
   },
   routeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: COLORS.primary,
+    marginTop: 4,
+    flexShrink: 0,
   },
   routeDotEnd: {
     backgroundColor: COLORS.accent,
   },
-  routeText: {
+  routeLabel: {
+    ...TYPOGRAPHY.labelSmall,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  routeValue: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginTop: 2,
   },
   routeArrow: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xs,
   },
-  tripDetails: {
+
+  /* Details Grid */
+  detailsGrid: {
     flexDirection: 'row',
-    gap: SPACING.lg,
-    marginBottom: SPACING.md,
+    gap: SPACING.md,
   },
-  detailItem: {
+  detailCard: {
+    flex: 1,
+    backgroundColor: COLORS.primary + '08',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '15',
+  },
+  detailLabel: {
+    ...TYPOGRAPHY.labelSmall,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    fontWeight: '500',
+  },
+  detailValue: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  /* Driver Section */
+  driverSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  detailText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textSecondary,
-  },
-  tripFooter: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
+    backgroundColor: '#F9FAFB',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  driverInfo: {
+  driverCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
+    gap: SPACING.md,
   },
-  driverText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: COLORS.textSecondary,
+  driverAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  driverAvatarText: {
+    ...TYPOGRAPHY.h4,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  driverName: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     backgroundColor: COLORS.warning + '20',
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: RADIUS.sm,
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
   ratingText: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.labelSmall,
     color: COLORS.warning,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   rateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     borderRadius: RADIUS.lg,
     backgroundColor: COLORS.warning,
-    ...SHADOWS.sm,
+    ...SHADOWS.md,
   },
   rateBtnText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   repeatBtn: {
@@ -644,13 +729,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.xs,
     paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: 2,
     borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '08',
   },
   repeatBtnText: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 })

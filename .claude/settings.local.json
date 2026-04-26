@@ -21,7 +21,8 @@
       "Bash(git push:*)",
       "Bash(npm search:*)",
       "Bash(git archive *)",
-      "Bash(unzip -l trive_2026-04-25.zip)"
+      "Bash(unzip -l trive_2026-04-25.zip)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

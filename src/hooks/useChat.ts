@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getChatContactsForUser,
   getConversations,
@@ -6,6 +6,10 @@ import {
   sendMessage,
   markAsRead,
   deleteConversation,
+  subscribeToNewMessages,
+  subscribeToMessageChanges,
+  subscribeToTypingIndicator,
+  updateUserOnlineStatus,
   Message,
   Conversation,
   ChatContact,
@@ -18,9 +22,15 @@ export const useChat = (userId?: string) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentOtherUserId, setCurrentOtherUserId] = useState<string | null>(null)
+  const [otherUserTyping, setOtherUserTyping] = useState(false)
+
+  // Refs para limpiar suscripciones
+  const messagesChannelRef = useRef<(() => void) | null>(null)
+  const changesChannelRef = useRef<(() => void) | null>(null)
+  const typingChannelRef = useRef<(() => void) | null>(null)
 
   // ============================================
-  // CARGAR CONVERSACIONES (polling cada 2s)
+  // CARGAR CONVERSACIONES (polling cada 5s - reducido para salvar recursos)
   // ============================================
 
   useEffect(() => {
@@ -39,10 +49,14 @@ export const useChat = (userId?: string) => {
 
     loadConversations()
 
-    // Polling cada 2 segundos (NO es ideal, pero es simple sin WebSocket)
-    const interval = setInterval(loadConversations, 2000)
+    // Polling reducido a 5s para mantener sync sin sobrecargar
+    const interval = setInterval(loadConversations, 5000)
     return () => clearInterval(interval)
   }, [userId])
+
+  // ============================================
+  // CARGAR CONTACTOS
+  // ============================================
 
   useEffect(() => {
     if (!userId) return
@@ -67,6 +81,12 @@ export const useChat = (userId?: string) => {
     async (otherUserId: string) => {
       if (!userId) return
 
+      // Evitar cargar conversación contigo mismo
+      if (otherUserId === userId) {
+        console.warn('[useChat] ⚠️ No se puede cargar conversación contigo mismo')
+        return
+      }
+
       if (__DEV__) {
         console.log('[useChat] loadConversation', { userId, otherUserId })
       }
@@ -75,11 +95,80 @@ export const useChat = (userId?: string) => {
         setError(null)
         setLoading(true)
         setCurrentOtherUserId(otherUserId)
+
+        // Limpiar suscripciones anteriores
+        if (messagesChannelRef.current) {
+          messagesChannelRef.current()
+          messagesChannelRef.current = null
+        }
+        if (changesChannelRef.current) {
+          changesChannelRef.current()
+          changesChannelRef.current = null
+        }
+        if (typingChannelRef.current) {
+          typingChannelRef.current()
+          typingChannelRef.current = null
+        }
+
         const data = await getConversation(userId, otherUserId)
         if (__DEV__) {
           console.log('[useChat] loadConversation result', { otherUserId, length: (data || []).length })
         }
         setMessages(data)
+
+        // ============================================
+        // REALTIME: Suscribirse a nuevos mensajes
+        // ============================================
+        messagesChannelRef.current = subscribeToNewMessages(
+          userId,
+          otherUserId,
+          (newMessage) => {
+            if (__DEV__) {
+              console.log('[useChat] 📩 Nuevo mensaje recibido:', newMessage.id)
+            }
+            setMessages(prev => {
+              // Evitar duplicados
+              if (prev.some(m => m.id === newMessage.id)) {
+                return prev
+              }
+              return [...prev, newMessage]
+            })
+          }
+        )
+
+        // ============================================
+        // REALTIME: Suscribirse a cambios en mensajes (edit, delete)
+        // ============================================
+        const messageIds = data.map(m => m.id)
+        if (messageIds.length > 0) {
+          changesChannelRef.current = subscribeToMessageChanges(
+            messageIds,
+            (messageId, changes) => {
+              if (__DEV__) {
+                console.log('[useChat] 📝 Mensaje actualizado:', messageId, changes)
+              }
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === messageId ? { ...m, ...changes } : m
+                )
+              )
+            }
+          )
+        }
+
+        // ============================================
+        // REALTIME: Escuchar typing del otro usuario
+        // ============================================
+        typingChannelRef.current = subscribeToTypingIndicator(
+          userId,
+          otherUserId,
+          (isTyping) => {
+            if (__DEV__) {
+              console.log('[useChat] ⏳ Otro usuario typing:', isTyping)
+            }
+            setOtherUserTyping(isTyping)
+          }
+        )
       } catch (err: any) {
         setError(err.message)
         console.error('Error loading conversation:', err)
@@ -91,25 +180,26 @@ export const useChat = (userId?: string) => {
   )
 
   // ============================================
-  // POLLING PARA NUEVOS MENSAJES (cada 2s)
+  // LIMPIEZA AL CAMBIAR DE CONVERSACIÓN O DESMONTAR
   // ============================================
 
   useEffect(() => {
-    if (!userId || !currentOtherUserId) return
-
-    const pollMessages = async () => {
-      try {
-        const data = await getConversation(userId, currentOtherUserId)
-        setMessages(data)
-      } catch (err: any) {
-        console.error('Error polling messages:', err)
+    return () => {
+      // Limpiar todas las suscripciones
+      if (messagesChannelRef.current) {
+        messagesChannelRef.current()
+        messagesChannelRef.current = null
+      }
+      if (changesChannelRef.current) {
+        changesChannelRef.current()
+        changesChannelRef.current = null
+      }
+      if (typingChannelRef.current) {
+        typingChannelRef.current()
+        typingChannelRef.current = null
       }
     }
-
-    // Polling cada 2 segundos
-    const interval = setInterval(pollMessages, 2000)
-    return () => clearInterval(interval)
-  }, [userId, currentOtherUserId])
+  }, [])
 
   // ============================================
   // ENVIAR MENSAJE
@@ -128,7 +218,13 @@ export const useChat = (userId?: string) => {
         if (__DEV__) {
           console.log('[useChat] send result', { userId, currentOtherUserId, newMessage })
         }
-        setMessages(prev => [...prev, newMessage])
+        setMessages(prev => {
+          // Evitar duplicados (el realtime también podría agregar)
+          if (prev.some(m => m.id === newMessage.id)) {
+            return prev
+          }
+          return [...prev, newMessage]
+        })
       } catch (err: any) {
         setError(err.message)
         console.error('Error sending message:', err)
@@ -167,6 +263,24 @@ export const useChat = (userId?: string) => {
 
   const unreadCount = conversations.reduce((sum, c) => sum + c.unread_count, 0)
 
+  // ============================================
+  // ACTUALIZAR ESTADO ONLINE (llamar desde ChatScreen)
+  // ============================================
+
+  useEffect(() => {
+    if (!userId) return
+
+    // Actualizar online status inmediatamente
+    updateUserOnlineStatus(userId)
+
+    // Y luego cada 30 segundos mientras la app está activa
+    const interval = setInterval(() => {
+      updateUserOnlineStatus(userId)
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [userId])
+
   return {
     conversations,
     contacts,
@@ -179,5 +293,6 @@ export const useChat = (userId?: string) => {
     deleteChat,
     currentOtherUserId,
     setCurrentOtherUserId,
+    otherUserTyping,
   }
 }

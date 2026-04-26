@@ -24,6 +24,8 @@ interface ChatBubbleProps {
   onEdit?: () => void
   onPin?: () => void
   onUnpin?: () => void
+  reactions?: Array<{ emoji: string; count: number; userReacted: boolean }>
+  currentUserId?: string
 }
 
 // Función para formatear hora HH:MM
@@ -68,9 +70,10 @@ export const ChatBubble: React.FC<ChatBubbleProps> = memo(({
   onEdit,
   onPin,
   onUnpin,
+  reactions = [],
+  currentUserId,
 }) => {
   const [showMenu, setShowMenu] = useState(false)
-  const [reactions, setReactions] = useState<{ [key: string]: number }>({})
 
   const containerStyle = [
     baseStyles.container,
@@ -229,17 +232,12 @@ export const ChatBubble: React.FC<ChatBubbleProps> = memo(({
       )}
 
       {/* Reacciones con emoji */}
-      {Object.keys(reactions).length > 0 && (
+      {reactions.length > 0 && (
         <View style={{ marginHorizontal: SPACING.md, marginTop: SPACING.xs }}>
           <EmojiReactions
-            reactions={Object.entries(reactions)
-              .filter(([_, count]) => count > 0)
-              .map(([emoji, count]) => ({
-                emoji,
-                count: Math.max(0, parseInt(String(count), 10)),
-                userReacted: true,
-              }))}
-            canReact={false}
+            reactions={reactions}
+            canReact={!!onReact}
+            onToggleReaction={onReact ? (emoji) => onReact(emoji) : undefined}
           />
         </View>
       )}
@@ -262,7 +260,9 @@ export const ChatBubble: React.FC<ChatBubbleProps> = memo(({
   prevProps.onReply === nextProps.onReply &&
   prevProps.onEdit === nextProps.onEdit &&
   prevProps.onPin === nextProps.onPin &&
-  prevProps.onUnpin === nextProps.onUnpin
+  prevProps.onUnpin === nextProps.onUnpin &&
+  JSON.stringify(prevProps.reactions) === JSON.stringify(nextProps.reactions) &&
+  prevProps.currentUserId === nextProps.currentUserId
 ))
 
 const baseStyles = StyleSheet.create({

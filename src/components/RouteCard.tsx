@@ -44,7 +44,14 @@ export default function RouteCard({
       onPress={() => onPress(route)}
       activeOpacity={0.8}
     >
-      <View style={styles.routeCardContent}>
+      <View style={styles.cardHeader}>
+        {/* Vehicle Type Badge */}
+        {route.vehicle_type && (
+          <View style={styles.vehicleTypeBadge}>
+            <Text style={styles.vehicleTypeText}>{route.vehicle_type}</Text>
+          </View>
+        )}
+
         {/* Status Badge */}
         <View
           style={[
@@ -61,139 +68,132 @@ export default function RouteCard({
             {route.available_seats > 0 ? 'Disponible' : 'Lleno'}
           </Text>
         </View>
+      </View>
 
-        {route.vehicle_type && (
-          <View style={styles.vehicleTypeBadge}>
-            <Text style={styles.vehicleTypeText}>{route.vehicle_type}</Text>
+      {/* Route Info - Origin & Destination */}
+      <View style={styles.routeSection}>
+        <View style={styles.locationRow}>
+          <View style={styles.locationDot}>
+            <Ionicons name="location" size={20} color={COLORS.primary} />
           </View>
-        )}
-
-        {/* Route Info */}
-        <View style={styles.routeSection}>
-          <View style={styles.locationItem}>
-            <Ionicons name="location" size={16} color={COLORS.primary} />
-            <View style={styles.locationText}>
-              <Text style={styles.locationLabel}>SALIDA</Text>
-              <Text style={styles.locationName} numberOfLines={1}>
-                {route.origin}
-              </Text>
-            </View>
-          </View>
-
-          <Ionicons name="arrow-forward" size={14} color={COLORS.textSecondary} />
-
-          <View style={styles.locationItem}>
-            <Ionicons name="location" size={16} color={COLORS.error} />
-            <View style={styles.locationText}>
-              <Text style={styles.locationLabel}>DESTINO</Text>
-              <Text style={styles.locationName} numberOfLines={1}>
-                {route.destination}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Details Row */}
-        <View style={styles.detailsRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={12} color={COLORS.textSecondary} />
-            <Text style={styles.detailText}>
-              {formatTime(route.departure_time, route.arrival_time)}
-            </Text>
-          </View>
-
-          <View style={styles.detailDivider} />
-
-          <View style={styles.detailItem}>
-            <Ionicons name="cash-outline" size={12} color={COLORS.textSecondary} />
-            <Text style={styles.detailText}>{formatPrice(route.price_per_seat)}</Text>
-          </View>
-
-          <View style={styles.detailDivider} />
-
-          <View style={styles.detailItem}>
-            <Ionicons name="seat" size={12} color={COLORS.textSecondary} />
-            <Text style={styles.detailText}>
-              {route.available_seats === 0 ? '0' : route.available_seats}
+          <View style={styles.locationContent}>
+            <Text style={styles.locationLabel}>SALIDA</Text>
+            <Text style={styles.locationName} numberOfLines={1}>
+              {route.origin}
             </Text>
           </View>
         </View>
 
-        {/* Driver Info */}
-        <View style={styles.driverSection}>
-          <View style={styles.driverInfo}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverAvatarText}>
-                {route.driver_name?.charAt(0).toUpperCase() || '?'}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.driverName} numberOfLines={1}>
-                {route.driver_name || 'Conductor'}
-              </Text>
-              <Text style={styles.vehicleInfo} numberOfLines={1}>
-                {route.vehicle_plate || 'N/A'}
-              </Text>
-            </View>
-          </View>
+        <View style={styles.routeLine} />
 
-          {/* Reputation Badge Compacto */}
-          {reputation && (
-            <TouchableOpacity
+        <View style={styles.locationRow}>
+          <View style={styles.locationDot}>
+            <Ionicons name="location" size={20} color={COLORS.error} />
+          </View>
+          <View style={styles.locationContent}>
+            <Text style={styles.locationLabel}>DESTINO</Text>
+            <Text style={styles.locationName} numberOfLines={1}>
+              {route.destination}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Info Row - Time, Price, Seats */}
+      <View style={styles.infoRow}>
+        <View style={styles.infoItem}>
+          <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.infoValue}>
+            {formatTime(route.departure_time, route.arrival_time)}
+          </Text>
+        </View>
+
+        <View style={styles.infoDivider} />
+
+        <View style={styles.infoItem}>
+          <Ionicons name="cash-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.infoValue}>{formatPrice(route.price_per_seat)}</Text>
+        </View>
+
+        <View style={styles.infoDivider} />
+
+        <View style={styles.infoItem}>
+          <Ionicons name="people-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.infoValue}>
+            {route.available_seats === 0 ? '0' : route.available_seats}
+          </Text>
+          <Text style={styles.infoLabel}>puestos</Text>
+        </View>
+      </View>
+
+      {/* Driver & Reputation Row */}
+      <View style={styles.driverSection}>
+        <View style={styles.driverInfo}>
+          <View style={styles.driverAvatar}>
+            <Text style={styles.driverAvatarText}>
+              {route.driver_name?.charAt(0).toUpperCase() || '?'}
+            </Text>
+          </View>
+          <View style={styles.driverDetails}>
+            <Text style={styles.driverName} numberOfLines={1}>
+              {route.driver_name || 'Conductor'}
+            </Text>
+            <Text style={styles.vehicleInfo} numberOfLines={1}>
+              {route.vehicle_plate || 'N/A'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Reputation Badge */}
+        {reputation && (
+          <TouchableOpacity
+            style={[
+              styles.reputationBadge,
+              { backgroundColor: getTrustColor(reputation.weightedRating) + '15' },
+            ]}
+            onPress={() => onDetails(route.driver_id)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={getTrustIcon(reputation.weightedRating) as any}
+              size={16}
+              color={getTrustColor(reputation.weightedRating)}
+            />
+            <Text
               style={[
-                styles.reputationBadge,
-                { backgroundColor: getTrustColor(reputation.weightedRating) + '15' },
+                styles.ratingValue,
+                { color: getTrustColor(reputation.weightedRating) },
               ]}
-              onPress={() => onDetails(route.driver_id)}
-              activeOpacity={0.7}
             >
-              <Ionicons
-                name={getTrustIcon(reputation.weightedRating) as any}
-                size={14}
-                color={getTrustColor(reputation.weightedRating)}
-              />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.ratingText,
-                    { color: getTrustColor(reputation.weightedRating) },
-                  ]}
-                >
-                  {reputation.weightedRating.toFixed(1)}⭐
+              {reputation.weightedRating.toFixed(1)}
+            </Text>
+            <Ionicons name="star" size={12} color={getTrustColor(reputation.weightedRating)} />
+            {reputation.reviewComments.length > 0 && (
+              <View style={styles.commentCounter}>
+                <Ionicons name="chatbubble" size={12} color={COLORS.textSecondary} />
+                <Text style={styles.commentCountText}>
+                  {reputation.reviewComments.length}
                 </Text>
               </View>
-              {reputation.reviewComments.length > 0 && (
-                <View style={styles.commentCounter}>
-                  <Ionicons name="chatbubble" size={12} color={COLORS.textSecondary} />
-                  <Text style={styles.commentCountText}>
-                    {reputation.reviewComments.length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Bottom CTA */}
-      <View style={styles.bottomSection}>
-        <Text style={styles.seatsText}>
-          {route.available_seats === 0
-            ? 'Lleno'
-            : `${route.available_seats} puesto${route.available_seats > 1 ? 's' : ''}`}
+      <TouchableOpacity
+        style={[
+          styles.ctaButton,
+          route.available_seats === 0 && styles.ctaButtonDisabled,
+        ]}
+        onPress={() => onPress(route)}
+        disabled={route.available_seats === 0}
+      >
+        <Text style={styles.ctaButtonText}>
+          {route.available_seats === 0 ? 'Viaje lleno' : 'Ver detalles y reservar'}
         </Text>
-        <TouchableOpacity
-          style={[
-            styles.detailsButton,
-            route.available_seats === 0 && styles.detailsButtonDisabled,
-          ]}
-          onPress={() => onPress(route)}
-          disabled={route.available_seats === 0}
-        >
-          <Text style={styles.detailsButtonText}>Ver detalles</Text>
-          <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+        <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+      </TouchableOpacity>
     </TouchableOpacity>
   )
 }
@@ -203,27 +203,38 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.lg,
     marginBottom: SPACING.lg,
     borderRadius: RADIUS.lg,
-    overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     ...SHADOWS.md,
+    overflow: 'hidden',
   },
 
-  routeCardContent: {
-    padding: SPACING.lg,
+  // Header with badges
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
   },
-
-  // Badges
+  vehicleTypeBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  vehicleTypeText: {
+    ...TYPOGRAPHY.caption,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   statusBadge: {
-    position: 'absolute',
-    top: SPACING.md,
-    right: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
     gap: 4,
-    zIndex: 10,
   },
   badgeAvailable: {
     backgroundColor: COLORS.success + '15',
@@ -237,71 +248,76 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
 
-  vehicleTypeBadge: {
-    position: 'absolute',
-    top: SPACING.md,
-    left: SPACING.md,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: RADIUS.sm,
-  },
-  vehicleTypeText: {
-    ...TYPOGRAPHY.caption,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-
-  // Route Section
+  // Route Section with visual line
   routeSection: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.lg,
   },
-  locationItem: {
-    flex: 1,
-    flexDirection: 'row',
+  locationDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.xs,
   },
-  locationText: {
+  locationContent: {
     flex: 1,
   },
   locationLabel: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   locationName: {
+    ...TYPOGRAPHY.body2,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  routeLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 15,
+    marginVertical: 4,
+  },
+
+  // Info Row (time, price, seats)
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: '#F9FAFB',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  infoValue: {
     ...TYPOGRAPHY.body3,
     color: COLORS.textPrimary,
     fontWeight: '600',
   },
-
-  // Details Row
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    marginBottom: SPACING.md,
-    gap: SPACING.xs,
-  },
-  detailItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  detailText: {
+  infoLabel: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
   },
-  detailDivider: {
+  infoDivider: {
     width: 1,
-    height: 12,
+    height: 20,
     backgroundColor: '#E5E7EB',
   },
 
@@ -310,26 +326,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
   },
   driverInfo: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
+    flex: 1,
   },
   driverAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   driverAvatarText: {
-    ...TYPOGRAPHY.body3,
+    ...TYPOGRAPHY.body2,
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  driverDetails: {
+    flex: 1,
   },
   driverName: {
     ...TYPOGRAPHY.body3,
@@ -341,24 +362,24 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  // Reputation Badge Compacto
+  // Reputation Badge
   reputationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     gap: 4,
   },
-  ratingText: {
-    ...TYPOGRAPHY.caption,
+  ratingValue: {
+    ...TYPOGRAPHY.body3,
     fontWeight: '700',
   },
   commentCounter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    paddingLeft: SPACING.xs,
+    marginLeft: SPACING.xs,
   },
   commentCountText: {
     ...TYPOGRAPHY.caption,
@@ -366,36 +387,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Bottom Section
-  bottomSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: '#F9FAFB',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  seatsText: {
-    ...TYPOGRAPHY.body3,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  detailsButton: {
+  // CTA Button
+  ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    paddingVertical: SPACING.sm + 2,
     borderRadius: RADIUS.md,
     gap: SPACING.xs,
   },
-  detailsButtonDisabled: {
+  ctaButtonDisabled: {
     backgroundColor: COLORS.textTertiary,
   },
-  detailsButtonText: {
+  ctaButtonText: {
     ...TYPOGRAPHY.body3,
     color: '#FFFFFF',
     fontWeight: '600',
