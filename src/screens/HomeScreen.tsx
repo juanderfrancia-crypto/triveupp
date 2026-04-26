@@ -129,7 +129,7 @@ export default function HomeScreen() {
             {/* Header Row: Greeting + Notification Button */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.greeting, { color: '#1a1a1a', fontSize: 26, fontWeight: '600', lineHeight: 32 }]}>
+                <Text style={[styles.greeting, { color: '#1a1a1a', ...TYPOGRAPHY.h2, fontWeight: '600' }]}>
                   {getGreeting()}, <Text style={{ fontWeight: '800', color: COLORS.primary }}>
                     {user?.name ? user.name.split(' ')[0] : 'Usuario'}
                   </Text>
@@ -138,6 +138,9 @@ export default function HomeScreen() {
               
               {/* Notification Button - Black Background */}
               <TouchableOpacity
+                accessible
+                accessibilityLabel="Notificaciones"
+                accessibilityRole="button"
                 style={{
                   backgroundColor: '#1a1a1a',
                   width: 44,
@@ -163,7 +166,7 @@ export default function HomeScreen() {
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
+                    <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#fff' }}>
                       {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
                     </Text>
                   </View>
@@ -172,20 +175,18 @@ export default function HomeScreen() {
             </View>
 
             {/* Main Amount - PROTAGONIST */}
-            <View style={{ marginBottom: 12 }}>
+            <View style={{ marginBottom: SPACING.md }}>
               <Text style={{ 
-                fontSize: 32, 
-                fontWeight: '800', 
+                ...TYPOGRAPHY.h1, 
                 color: COLORS.primary,
                 letterSpacing: -0.8
               }}>
                 ${(isDriver ? user?.earnings ?? 0 : user?.spent ?? 0).toLocaleString('es-CO')}
               </Text>
               <Text style={{ 
-                fontSize: 12, 
-                fontWeight: '500', 
+                ...TYPOGRAPHY.bodySmall, 
                 color: '#1a1a1a' + '75',
-                marginTop: 2
+                marginTop: SPACING.xs
               }}>
                 {isDriver ? 'Ganancias hoy' : 'Gastado este mes'}
               </Text>
@@ -193,48 +194,48 @@ export default function HomeScreen() {
 
             {/* Status Pills - Conductor */}
             {isDriver && (
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
                 <View style={{
                   backgroundColor: 'rgba(21, 74, 168, 0.1)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 8,
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 4
+                  gap: SPACING.xs
                 }}>
                   <Ionicons name="car" size={14} color={COLORS.primary} />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary }}>
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
                     4 viajes
                   </Text>
                 </View>
                 
                 <View style={{
                   backgroundColor: 'rgba(250, 204, 21, 0.1)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 8,
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 3
+                  gap: SPACING.xs
                 }}>
                   <Ionicons name="star" size={14} color="#FACC15" />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#92400E' }}>
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#92400E' }}>
                     4.8
                   </Text>
                 </View>
                 
                 <View style={{
                   backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 8,
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 4
+                  gap: SPACING.xs
                 }}>
                   <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#065F46' }}>
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#065F46' }}>
                     En línea
                   </Text>
                 </View>
@@ -243,18 +244,18 @@ export default function HomeScreen() {
 
             {/* Status Pills - Pasajero */}
             {!isDriver && (
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
                 <View style={{
                   backgroundColor: 'rgba(21, 74, 168, 0.1)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 8,
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 4
+                  gap: SPACING.xs
                 }}>
                   <Ionicons name="calendar" size={14} color={COLORS.primary} />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary }}>
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
                     Próx: 22:30
                   </Text>
                 </View>
@@ -294,20 +295,20 @@ export default function HomeScreen() {
                   return (
                     <View style={{
                       backgroundColor: colors.bg,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 8,
+                      paddingHorizontal: SPACING.sm,
+                      paddingVertical: SPACING.xs,
+                      borderRadius: RADIUS.md,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 4
+                      gap: SPACING.xs
                     }}>
                       <Ionicons name={colors.icon as any} size={14} color={colors.text} />
                       <View>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>
+                        <Text style={{ ...TYPOGRAPHY.labelSmall, color: colors.text }}>
                           {displayText}
                         </Text>
                         {displaySubtext && (
-                          <Text style={{ fontSize: 10, color: colors.text, opacity: 0.7 }}>
+                          <Text style={{ ...TYPOGRAPHY.labelSmall, color: colors.text, opacity: 0.7 }}>
                             {displaySubtext}
                           </Text>
                         )}
@@ -358,7 +359,7 @@ export default function HomeScreen() {
             )}
 
             {/* TRIVE Chip - Bottom */}
-            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start', marginTop: 12 }]}>
+            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start', marginTop: SPACING.md }]}>
               <Text style={[styles.balanceChipText, { color: COLORS.textInverse }]}>TRIVE</Text>
             </View>
           </View>
@@ -377,6 +378,8 @@ export default function HomeScreen() {
               <View style={styles.searchInputContainer}>
                 <Text style={styles.searchLabel}>Desde</Text>
                 <TextInput
+                  accessible
+                  accessibilityLabel="Ubicación de origen"
                   style={styles.searchInput}
                   placeholder="Ej: Armenia, Cali..."
                   placeholderTextColor={COLORS.textTertiary}
@@ -393,6 +396,8 @@ export default function HomeScreen() {
               <View style={styles.searchInputContainer}>
                 <Text style={styles.searchLabel}>Hacia</Text>
                 <TextInput
+                  accessible
+                  accessibilityLabel="Ubicación de destino"
                   style={styles.searchInput}
                   placeholder="Ej: Cali, Puerto Tejada..."
                   placeholderTextColor={COLORS.textTertiary}
@@ -404,6 +409,9 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity
+            accessible
+            accessibilityLabel="Buscar rutas disponibles"
+            accessibilityRole="button"
             style={[styles.searchBtn, (!destination || !origin) && styles.searchBtnDisabled] as any}
             disabled={!destination || !origin}
             onPress={() =>
@@ -423,6 +431,9 @@ export default function HomeScreen() {
 
         {/* Available Rides NOW Button */}
         <TouchableOpacity
+          accessible
+          accessibilityLabel="Ver viajes disponibles ahora"
+          accessibilityRole="button"
           style={styles.availableRidesButton}
           onPress={() => navigation.navigate('AvailableRides' as never)}
           activeOpacity={0.8}
@@ -461,6 +472,9 @@ export default function HomeScreen() {
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Rutas destacadas</Text>
             <TouchableOpacity
+              accessible
+              accessibilityLabel="Ver todas las rutas destacadas"
+              accessibilityRole="button"
               onPress={() =>
                 navigation.navigate(
                   'Main' as never,
