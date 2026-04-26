@@ -356,14 +356,14 @@ const styles = StyleSheet.create({
   },
   timeAvailability: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderRadius: RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
     backgroundColor: COLORS.background,
     gap: SPACING.md,
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
   },
   timeBlock: {
     flexDirection: 'row',
@@ -415,7 +415,8 @@ const styles = StyleSheet.create({
   },
   priceBlock: {
     alignItems: 'flex-end',
-    flex: 0,
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   priceLabel: {
     ...TYPOGRAPHY.labelSmall,
@@ -427,6 +428,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '700',
     fontSize: 16,
+    flexWrap: 'wrap',
   },
   driverInfo: {
     flexDirection: 'row',
