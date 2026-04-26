@@ -3,11 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIn
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useProfile } from '../hooks/useProfile'
 import { useAuth } from '../hooks/useAuth'
+import { usePassengerStats } from '../hooks/usePassengerStats'
 import Toast from '../components/Toast'
 import { uploadProfilePhoto, uploadVehiclePhoto } from '../services/photoUpload'
 
@@ -16,6 +17,7 @@ export default function ProfileScreen() {
   const { user, logout: logoutStore } = useAppStore()
   const { logout: logoutAuth } = useAuth()
   const { profile, loading, switchRole, fetchProfile } = useProfile(user?.id)
+  const { stats: passengerStats, loading: statsLoading, refetch: refetchStats } = usePassengerStats(user?.id)
   const [isDriver, setIsDriver] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -31,6 +33,15 @@ export default function ProfileScreen() {
       setIsDriver(profile.role === 'driver')
     }
   }, [profile?.role])
+
+  // Recargar stats del pasajero cuando la pantalla recibe el enfoque
+  useFocusEffect(
+    useEffect(() => {
+      if (!isDriver) {
+        refetchStats()
+      }
+    }, [isDriver, refetchStats])
+  )
 
   // Ejecutar logout cuando shouldLogout sea true
   useEffect(() => {
@@ -277,7 +288,7 @@ export default function ProfileScreen() {
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={16} color={COLORS.accent} />
               <Text style={styles.ratingText}>{profile?.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.ratingLabel}>({profile?.total_trips || 0} viajes)</Text>
+              <Text style={styles.ratingLabel}>({!isDriver ? passengerStats?.totalTrips || 0 : profile?.total_trips || 0} viajes)</Text>
             </View>
           </View>
         </View>
@@ -331,12 +342,12 @@ export default function ProfileScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Ionicons name="car-outline" size={24} color={COLORS.primary} style={{ marginBottom: SPACING.sm }} />
-              <Text style={styles.statValue}>{profile?.total_trips || 0}</Text>
+              <Text style={styles.statValue}>{passengerStats?.totalTrips || 0}</Text>
               <Text style={styles.statLabel}>Viajes</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="cash-outline" size={24} color={COLORS.primary} style={{ marginBottom: SPACING.sm }} />
-              <Text style={styles.statValue}>${(profile?.total_spent || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</Text>
+              <Text style={styles.statValue}>${(passengerStats?.totalSpent || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</Text>
               <Text style={styles.statLabel}>Gastado</Text>
             </View>
           </View>
