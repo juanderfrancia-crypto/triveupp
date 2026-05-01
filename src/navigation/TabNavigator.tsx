@@ -59,9 +59,9 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Inicio' }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'Buscar' }} />
-      <Tab.Screen name="Messages" component={ChatScreen} options={{ title: 'Mensajes' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
     </Tab.Navigator>
+  )
 }
 
 const styles = StyleSheet.create({
