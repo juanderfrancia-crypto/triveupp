@@ -9,6 +9,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
 import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
+import { TripMessagesModal } from '../components/TripMessagesModal'
 
 export default function TripStatusScreen() {
   const navigation = useNavigation<any>()
@@ -23,6 +24,7 @@ export default function TripStatusScreen() {
     type: 'success' | 'error' | 'info' | 'warning'
   }>({ visible: false, message: '', type: 'info' })
   const [userBooking, setUserBooking] = useState<any>(null)
+  const [selectedTripForChat, setSelectedTripForChat] = useState<any>(null)
 
   const loadBookings = useCallback(async () => {
     if (!selectedRoute) return
@@ -276,7 +278,11 @@ export default function TripStatusScreen() {
                           })
                           return
                         }
-                        navigation.navigate('Chat' as never, { otherUserId: selectedRoute.driver_id } as never)
+                        setSelectedTripForChat({
+                          id: selectedRoute.id,
+                          driverId: selectedRoute.driver_id,
+                          driverName: selectedRoute.driver_name,
+                        })
                       }}
                     >
                       <Ionicons name="chatbubble" size={16} color={COLORS.primary} />
@@ -302,7 +308,11 @@ export default function TripStatusScreen() {
               <TouchableOpacity
                 style={styles.quickChatBtn}
                 onPress={() => {
-                  if (!selectedRoute?.driver_id) {
+                  setSelectedTripForChat({
+                    id: selectedRoute.id,
+                    driverId: selectedRoute.driver_id,
+                    driverName: selectedRoute.driver_name,
+                  }
                     setToastConfig({ visible: true, message: 'No está disponible el chat con el conductor', type: 'error' })
                     return
                   }
@@ -417,6 +427,18 @@ export default function TripStatusScreen() {
               onHide={() => setToastConfig({ ...toastConfig, visible: false })}
               duration={toastConfig.type === 'error' ? 4000 : 3000}
             />
+
+            {/* Trip Messages Modal */}
+            {selectedTripForChat && user && (
+              <TripMessagesModal
+                visible={!!selectedTripForChat}
+                tripId={selectedTripForChat.id}
+                userId={user.id}
+                otherUserId={selectedTripForChat.driverId}
+                otherUserName={selectedTripForChat.driverName}
+                onClose={() => setSelectedTripForChat(null)}
+              />
+            )}
           </>
         )}
       </ScrollView>

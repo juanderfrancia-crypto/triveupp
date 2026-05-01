@@ -9,6 +9,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useBookings } from '../hooks/useBookings'
 import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
+import { TripMessagesModal } from '../components/TripMessagesModal'
 
 export default function ScheduledTripsScreen() {
   const navigation = useNavigation<any>()
@@ -23,6 +24,8 @@ export default function ScheduledTripsScreen() {
     message: string
     type: 'success' | 'error' | 'info' | 'warning'
   }>({ visible: false, message: '', type: 'info' })
+
+  const [selectedTripForChat, setSelectedTripForChat] = useState<any>(null)
 
   const loadPassengerBookings = useCallback(async () => {
     if (!user) return
@@ -171,7 +174,11 @@ export default function ScheduledTripsScreen() {
       setToastConfig({ visible: true, message: 'No hay conductor asignado para chatear aún', type: 'warning' })
       return
     }
-    navigation.navigate('Chat' as never, { otherUserId: tripData.driverId } as never)
+    setSelectedTripForChat({
+      id: tripData.routeId,
+      driverId: tripData.driverId,
+      driverName: tripData.driverName,
+    })
     setModalVisible(false)
   }
 
@@ -573,6 +580,18 @@ export default function ScheduledTripsScreen() {
           onHide={() => setToastConfig({ ...toastConfig, visible: false })}
           duration={toastConfig.type === 'error' ? 4000 : 3000}
         />
+
+        {/* Trip Messages Modal */}
+        {selectedTripForChat && user && (
+          <TripMessagesModal
+            visible={!!selectedTripForChat}
+            tripId={selectedTripForChat.id}
+            userId={user.id}
+            otherUserId={selectedTripForChat.driverId}
+            otherUserName={selectedTripForChat.driverName}
+            onClose={() => setSelectedTripForChat(null)}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   )
