@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -10,17 +11,16 @@ import {
   Animated,
   Easing,
 } from 'react-native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { usePassengerHomeStats } from '../hooks/usePassengerHomeStats'
+import { useDriverEarnings } from '../hooks/useDriverEarnings'
 import { useRoutes, Route } from '../hooks/useRoutes'
 import { useNotifications } from '../hooks/useNotifications'
-import { useFocusEffect } from '@react-navigation/native'
-// import { useUserLocation } from '../hooks/useUserLocation' // ❌ GEOLOCALIZACIÓN DESHABILITADA
 import {
   calculateTripProgress,
   getTripStatusMessage,
@@ -103,6 +103,13 @@ export default function HomeScreen() {
     }
   }, [shimmerAnim])
 
+
+  // Stats del pasajero para HomeScreen
+  const { stats: passengerHomeStats, loading: statsLoading, refetch: refetchHomeStats } = usePassengerHomeStats(user?.id)
+
+  // Stats del conductor para HomeScreen
+  const { earnings: driverEarnings, loading: driverEarningsLoading, refetch: refetchDriverEarnings } = useDriverEarnings(isDriver ? user?.id : undefined)
+
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
       {/* Fondo blanco puro */}
@@ -181,7 +188,9 @@ export default function HomeScreen() {
                 color: COLORS.primary,
                 letterSpacing: -0.8
               }}>
-                ${(isDriver ? user?.earnings ?? 0 : user?.spent ?? 0).toLocaleString('es-CO')}
+                {isDriver
+                  ? (driverEarnings?.thisMonthEarnings ?? 0).toLocaleString('es-CO')
+                  : (passengerHomeStats?.spentThisMonth ?? 0).toLocaleString('es-CO')}
               </Text>
               <Text style={{ 
                 ...TYPOGRAPHY.bodySmall, 
@@ -191,56 +200,6 @@ export default function HomeScreen() {
                 {isDriver ? 'Ganancias hoy' : 'Gastado este mes'}
               </Text>
             </View>
-
-            {/* Status Pills - Conductor */}
-            {isDriver && (
-              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
-                <View style={{
-                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="car" size={14} color={COLORS.primary} />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
-                    4 viajes
-                  </Text>
-                </View>
-                
-                <View style={{
-                  backgroundColor: 'rgba(250, 204, 21, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="star" size={14} color="#FACC15" />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#92400E' }}>
-                    4.8
-                  </Text>
-                </View>
-                
-                <View style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#065F46' }}>
-                    En línea
-                  </Text>
-                </View>
-              </View>
-            )}
 
             {/* Status Pills - Pasajero */}
             {!isDriver && (
@@ -256,10 +215,9 @@ export default function HomeScreen() {
                 }}>
                   <Ionicons name="calendar" size={14} color={COLORS.primary} />
                   <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
-                    Próx: 22:30
+                    Próx: {passengerHomeStats?.nextTripTime ? passengerHomeStats.nextTripTime : '--:--'}
                   </Text>
                 </View>
-                
                 {/* Membership Badge */}
                 {(() => {
                   const membershipType = user?.membership_type || 'free'
@@ -316,55 +274,60 @@ export default function HomeScreen() {
                     </View>
                   )
                 })()}
-                
-                {/* Saldo Badge */}
-                {(() => {
-                  const balance = user?.balance || 0
-                  const formattedBalance = balance >= 1000 
-                    ? `$${(balance / 1000).toFixed(1)}k`
-                    : `$${balance}`
-                  
-                  let balanceColor = '#22C55E' // Green (healthy)
-                  let balanceTextColor = '#15803D'
-                  
-                  if (balance < 10000) {
-                    balanceColor = '#EAB308' // Yellow (low)
-                    balanceTextColor = '#713F12'
-                  }
-                  if (balance < 5000) {
-                    balanceColor = '#EF4444' // Red (warning)
-                    balanceTextColor = '#7F1D1D'
-                  }
-
-                  return (
-                    <View style={{
-                      backgroundColor: balanceColor === '#22C55E' ? 'rgba(34, 197, 94, 0.1)' : balanceColor === '#EAB308' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4
-                    }}>
-                      <Ionicons name="wallet" size={14} color={balanceColor} />
-                      <View>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: balanceTextColor }}>
-                          Saldo: {formattedBalance}
-                        </Text>
-                      </View>
-                    </View>
-                  )
-                })()}
               </View>
             )}
 
-            {/* TRIVE Chip - Bottom */}
-            <View style={[styles.balanceChip, { backgroundColor: COLORS.primary, alignSelf: 'flex-start', marginTop: SPACING.md }]}>
-              <Text style={[styles.balanceChipText, { color: COLORS.textInverse }]}>TRIVE</Text>
-            </View>
+            {/* Status Pills - Conductor */}
+            {isDriver && (
+              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
+                <View style={{
+                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: SPACING.xs
+                }}>
+                  <Ionicons name="car" size={14} color={COLORS.primary} />
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
+                    {driverEarnings?.completedTrips ?? 0} viajes
+                  </Text>
+                </View>
+
+                <View style={{
+                  backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: SPACING.xs
+                }}>
+                  <Ionicons name="star" size={14} color="#FACC15" />
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#92400E' }}>
+                    {user?.rating ?? '--'}
+                  </Text>
+                </View>
+
+                <View style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  paddingHorizontal: SPACING.sm,
+                  paddingVertical: SPACING.xs,
+                  borderRadius: RADIUS.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: SPACING.xs
+                }}>
+                  <Ionicons name="radio" size={14} color="#10B981" />
+                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#047857' }}>
+                    En línea
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
-
         {/* Search Section */}
         <View style={styles.searchSection}>
           <Text style={styles.sectionTitle}>Buscar viaje</Text>
@@ -594,10 +557,11 @@ export default function HomeScreen() {
               </Text>
             </View>
           )}
+
         </View>
       </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({

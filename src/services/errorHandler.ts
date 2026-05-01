@@ -239,11 +239,10 @@ class ErrorHandler {
    */
   private showErrorToast(message: string, severity: ErrorSeverity) {
     const toastType = severity === ErrorSeverity.CRITICAL ? 'error' : 'info';
-    const icon = severity === ErrorSeverity.CRITICAL ? '❌' : '⚠️';
 
     Toast.show({
       type: toastType,
-      text1: `${icon} Error`,
+      text1: 'Error',
       text2: message,
       visibilityTime: severity === ErrorSeverity.CRITICAL ? 5000 : 3000,
     });

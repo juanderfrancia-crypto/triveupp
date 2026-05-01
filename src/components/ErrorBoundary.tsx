@@ -47,7 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
     // Mostrar toast con error
     Toast.show({
       type: 'error',
-      text1: '❌ Algo salió mal',
+      text1: 'Algo salio mal',
       text2: this.getErrorMessage(error),
       visibilityTime: 4000,
     });

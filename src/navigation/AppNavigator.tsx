@@ -9,7 +9,6 @@ import RegisterScreen from '../screens/RegisterScreen'
 import VerifyEmailScreen from '../screens/VerifyEmailScreen'
 import SeatSelectionScreen from '../screens/SeatSelectionScreen'
 import BookingScreen from '../screens/BookingScreen'
-import ChatScreen from '../screens/ChatScreen'
 import TripStatusScreen from '../screens/TripStatusScreen'
 import DriverRegisterScreen from '../screens/DriverRegisterScreen'
 import DriverPanelScreen from '../screens/DriverPanelScreen'
@@ -140,7 +139,6 @@ export default function AppNavigator() {
             <Stack.Screen name="SeatSelection" component={SeatSelectionScreen} />
             <Stack.Screen name="Booking" component={BookingScreen} />
             <Stack.Screen name="TripStatus" component={TripStatusScreen} />
-            <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
             <Stack.Screen name="DriverPanel" component={DriverPanelScreen} />
             <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen} />

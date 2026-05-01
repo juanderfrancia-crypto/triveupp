@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Animated,
+  Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -22,6 +24,11 @@ import OfflineBanner from '../components/OfflineBanner'
 import RouteCard from '../components/RouteCard'
 import DriverDetailsBottomSheet from '../components/DriverDetailsBottomSheet'
 import { useDriverReputation } from '../hooks/useDriverReputation'
+
+// Tipos para ordenar
+type SortOption = 'departure' | 'price' | 'rating' | 'available'
+type TransportFilter = 'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'
+type AvailabilityFilter = 'all' | 'available'
 
 export default function SearchScreen() {
   const navigation = useNavigation()
@@ -50,11 +57,17 @@ export default function SearchScreen() {
   }, [route.params])
 
   const [search, setSearch] = useState(() => routeDestination || '')
-  const [filter, setFilter] = useState<'all' | 'available'>('all')
-  const [transportType, setTransportType] = useState<'all' | 'auto' | 'taxi' | 'busetica' | 'buseta'>(routeTransportType)
+  const [filter, setFilter] = useState<AvailabilityFilter>('all')
+  const [transportType, setTransportType] = useState<TransportFilter>(routeTransportType)
+  const [sortBy, setSortBy] = useState<SortOption>('departure')
   const [refreshing, setRefreshing] = useState(false)
   const [selectedDriver, setSelectedDriver] = useState<{ id: string; name: string; route: Route } | null>(null)
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false)
+  const [showSortModal, setShowSortModal] = useState(false)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+
+  // Animación para el header al hacer scroll
+  const scrollY = useRef(new Animated.Value(0)).current
 
   // Fetch reputation for selected driver
   const { reputation, loading: reputationLoading } = useDriverReputation(selectedDriver?.id || '')
@@ -130,7 +143,8 @@ export default function SearchScreen() {
   const showLoading = loading && routes.length === 0
 
   const displayRoutes = useMemo(() => {
-    return routes.filter((route) => {
+    // First filter
+    let filtered = routes.filter((route) => {
       const matchSearch =
         route.origin.toLowerCase().includes(search.toLowerCase()) ||
         route.destination.toLowerCase().includes(search.toLowerCase())
@@ -139,7 +153,22 @@ export default function SearchScreen() {
         transportType === 'all' || route.vehicle_type === transportType
       return matchSearch && matchFilter && matchVehicleType
     })
-  }, [routes, search, filter, transportType])
+
+    // Then sort
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'price':
+          return a.price_per_seat - b.price_per_seat
+        case 'available':
+          return b.available_seats - a.available_seats
+        case 'rating':
+          return (b.driver_rating || 0) - (a.driver_rating || 0)
+        case 'departure':
+        default:
+          return new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime()
+      }
+    })
+  }, [routes, search, filter, transportType, sortBy])
 
   const handleSelectRoute = (route: Route) => {
     // Guardar la ruta seleccionada en el store
@@ -185,7 +214,126 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
       <OfflineBanner />
-      <ScrollView
+
+      {/* Sticky Header with Search */}
+      <View style={[styles.stickyHeader, isSearchFocused && styles.stickyHeaderFocused]}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.headerTitle}>
+            <Text style={styles.title}>Buscar rutas</Text>
+            {displayRoutes.length > 0 && (
+              <Text style={styles.subtitle}>{displayRoutes.length} rutas</Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => setShowSortModal(true)}
+          >
+            <Ionicons name="swap-vertical" size={22} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Box - Enhanced */}
+        <View style={styles.searchContainer}>
+          <View style={[styles.searchBox, isSearchFocused && styles.searchBoxFocused]}>
+            <Ionicons name="search" size={20} color={COLORS.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="¿A dónde vas? Origen o destino..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              returnKeyType="search"
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Quick Filters Row */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickFiltersContainer}
+        >
+          {/* Availability Filter */}
+          <TouchableOpacity
+            style={[styles.quickFilterChip, filter === 'available' && styles.quickFilterChipActive]}
+            onPress={() => setFilter(filter === 'available' ? 'all' : 'available')}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={16}
+              color={filter === 'available' ? '#FFFFFF' : COLORS.success}
+            />
+            <Text style={[styles.quickFilterText, filter === 'available' && styles.quickFilterTextActive]}>
+              Con puestos
+            </Text>
+          </TouchableOpacity>
+
+          {/* Separator */}
+          <View style={styles.filterSeparator} />
+
+          {/* Transport Type Chips */}
+          <TouchableOpacity
+            style={[styles.transportChip, transportType === 'all' && styles.transportChipActive]}
+            onPress={() => setTransportType('all')}
+          >
+            <Text style={[styles.transportChipText, transportType === 'all' && styles.transportChipTextActive]}>
+              Todos
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.transportChip, transportType === 'auto' && styles.transportChipActive]}
+            onPress={() => setTransportType('auto')}
+          >
+            <Ionicons name="car-sport" size={14} color={transportType === 'auto' ? '#FFFFFF' : COLORS.textSecondary} />
+            <Text style={[styles.transportChipText, transportType === 'auto' && styles.transportChipTextActive]}>
+              Auto
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.transportChip, transportType === 'taxi' && styles.transportChipActive]}
+            onPress={() => setTransportType('taxi')}
+          >
+            <Ionicons name="car" size={14} color={transportType === 'taxi' ? '#FFFFFF' : COLORS.textSecondary} />
+            <Text style={[styles.transportChipText, transportType === 'taxi' && styles.transportChipTextActive]}>
+              Taxi
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.transportChip, transportType === 'busetica' && styles.transportChipActive]}
+            onPress={() => setTransportType('busetica')}
+          >
+            <Ionicons name="bus" size={14} color={transportType === 'busetica' ? '#FFFFFF' : COLORS.textSecondary} />
+            <Text style={[styles.transportChipText, transportType === 'busetica' && styles.transportChipTextActive]}>
+              Busetica
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.transportChip, transportType === 'buseta' && styles.transportChipActive]}
+            onPress={() => setTransportType('buseta')}
+          >
+            <Ionicons name="bus" size={14} color={transportType === 'buseta' ? '#FFFFFF' : COLORS.textSecondary} />
+            <Text style={[styles.transportChipText, transportType === 'buseta' && styles.transportChipTextActive]}>
+              Buseta
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* Scrollable Content */}
+      <Animated.ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -197,144 +345,8 @@ export default function SearchScreen() {
             colors={[COLORS.primary]}
           />
         }
+        scrollEventThrottle={16}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Rutas disponibles</Text>
-            <Text style={styles.subtitle}>{displayRoutes.length} rutas encontradas</Text>
-          </View>
-        </View>
-
-        {/* Search Box */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBox}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por origen o destino"
-              placeholderTextColor={COLORS.textTertiary}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')}>
-                <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Filter Tabs */}
-          <View style={styles.filterTabs}>
-            <TouchableOpacity
-              style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
-              onPress={() => setFilter('all')}
-            >
-              <Ionicons
-                name="list"
-                size={16}
-                color={filter === 'all' ? COLORS.textInverse : COLORS.textSecondary}
-              />
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
-                Todas
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterTab, filter === 'available' && styles.filterTabActive]}
-              onPress={() => setFilter('available')}
-            >
-              <Ionicons
-                name="checkmark-circle"
-                size={16}
-                color={filter === 'available' ? COLORS.textInverse : COLORS.textSecondary}
-              />
-              <Text style={[styles.filterText, filter === 'available' && styles.filterTextActive]}>
-                Con puestos
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Transport Type Filter */}
-          <View style={styles.transportTypeContainer}>
-            <TouchableOpacity
-              style={[styles.transportTypeTab, transportType === 'all' && styles.transportTypeTabActive]}
-              onPress={() => setTransportType('all')}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="car"
-                size={14}
-                color={transportType === 'all' ? '#FFFFFF' : '#1F2937'}
-              />
-              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'all' && styles.transportTypeTextActive]}>
-                Todos
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.transportTypeTab, transportType === 'auto' && styles.transportTypeTabActive]}
-              onPress={() => setTransportType('auto')}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="car-sport"
-                size={14}
-                color={transportType === 'auto' ? '#FFFFFF' : '#1F2937'}
-              />
-              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'auto' && styles.transportTypeTextActive]}>
-                Auto
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.transportTypeTab, transportType === 'taxi' && styles.transportTypeTabActive]}
-              onPress={() => setTransportType('taxi')}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="car"
-                size={14}
-                color={transportType === 'taxi' ? '#FFFFFF' : '#1F2937'}
-              />
-              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'taxi' && styles.transportTypeTextActive]}>
-                Taxi
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.transportTypeTab, transportType === 'busetica' && styles.transportTypeTabActive]}
-              onPress={() => setTransportType('busetica')}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="bus"
-                size={14}
-                color={transportType === 'busetica' ? '#FFFFFF' : '#1F2937'}
-              />
-              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'busetica' && styles.transportTypeTextActive]}>
-                Busetica
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.transportTypeTab, transportType === 'buseta' && styles.transportTypeTabActive]}
-              onPress={() => setTransportType('buseta')}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="bus"
-                size={14}
-                color={transportType === 'buseta' ? '#FFFFFF' : '#1F2937'}
-              />
-              <Text numberOfLines={1} style={[styles.transportTypeText, transportType === 'buseta' && styles.transportTypeTextActive]}>
-                Buseta
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Content */}
         {showLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -378,8 +390,59 @@ export default function SearchScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
-      
+      </Animated.ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View style={styles.sortModalContent}>
+            <View style={styles.sortModalHeader}>
+              <Text style={styles.sortModalTitle}>Ordenar por</Text>
+              <TouchableOpacity onPress={() => setShowSortModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {[
+              { key: 'departure', label: 'Hora de salida', icon: 'time-outline' },
+              { key: 'price', label: 'Precio (menor primero)', icon: 'cash-outline' },
+              { key: 'available', label: 'Más puestos disponibles', icon: 'people-outline' },
+              { key: 'rating', label: 'Mejor valorados', icon: 'star-outline' },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.sortOption, sortBy === option.key && styles.sortOptionActive]}
+                onPress={() => {
+                  setSortBy(option.key as SortOption)
+                  setShowSortModal(false)
+                }}
+              >
+                <Ionicons
+                  name={option.icon as any}
+                  size={20}
+                  color={sortBy === option.key ? COLORS.primary : COLORS.textSecondary}
+                />
+                <Text style={[styles.sortOptionText, sortBy === option.key && styles.sortOptionTextActive]}>
+                  {option.label}
+                </Text>
+                {sortBy === option.key && (
+                  <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Bottom Sheet for Driver Details */}
       <DriverDetailsBottomSheet
         visible={bottomSheetVisible}
@@ -399,30 +462,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  backgroundGradient: {
-    display: 'none',
-  },
-  decorativeCircleLarge: {
-    display: 'none',
-  },
-  decorativeCircleSmall: {
-    display: 'none',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scrollContent: {
-    paddingBottom: SPACING.xxxl,
-  },
 
-  // Header
-  header: {
+  // Sticky Header
+  stickyHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    ...SHADOWS.sm,
+  },
+  stickyHeaderFocused: {
+    borderBottomColor: COLORS.primary + '30',
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   backButton: {
     width: 40,
@@ -432,114 +489,127 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  titleContainer: {
+  headerTitle: {
     flex: 1,
+    marginLeft: SPACING.md,
   },
   title: {
     ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
+    fontWeight: '700',
   },
   subtitle: {
     ...TYPOGRAPHY.labelMedium,
     color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
+    marginTop: 2,
+  },
+  sortButton: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary + '12',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
-  // Search Container
+  // Search Container (inside sticky header)
   searchContainer: {
-    paddingHorizontal: SPACING.lg,
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.sm,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F9FA',
     borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.lg,
-    height: 52,
-    gap: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: SPACING.md,
+    height: 48,
+    gap: SPACING.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  searchBoxFocused: {
+    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.primary,
     ...SHADOWS.sm,
   },
   searchInput: {
     flex: 1,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    paddingRight: SPACING.md,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
   },
 
-  // Filter Tabs
-  filterTabs: {
+  // Quick Filters
+  quickFiltersContainer: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  filterTab: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: SPACING.xs,
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    ...SHADOWS.sm,
   },
-  filterTabActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    ...SHADOWS.sm,
+  filterSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: SPACING.xs,
   },
-  filterText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-
-  // Transport Type Filter
-  transportTypeContainer: {
+  quickFilterChip: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    justifyContent: 'flex-start',
-  },
-  transportTypeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    backgroundColor: '#F3F4F6',
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    minHeight: 42,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  transportTypeTabActive: {
+  quickFilterChipActive: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  quickFilterText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  quickFilterTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // Transport Chips
+  transportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  transportChipActive: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
-    ...SHADOWS.md,
   },
-  transportTypeText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textPrimary,
+  transportChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
     fontWeight: '600',
     fontSize: 12,
   },
-  transportTypeTextActive: {
+  transportChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
+  },
+
+  // Content ScrollView
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  scrollContent: {
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
   },
 
   // Loading
@@ -581,27 +651,16 @@ const styles = StyleSheet.create({
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.sm,
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     borderRadius: RADIUS.lg,
-    ...SHADOWS.orangeSoft,
-    // Sombra adicional para profundidad
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-    // Bordes blancos para realismo
-    borderTopWidth: 2,
-    borderTopColor: COLORS.shadowWhiteMid,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.shadowWhiteDark,
+    ...SHADOWS.md,
   },
   retryBtnText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 
@@ -610,12 +669,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxxl,
   },
   emptyIcon: {
-    width: 70,
-    height: 70,
+    width: 80,
+    height: 80,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.primary + '10',
     justifyContent: 'center',
@@ -626,289 +685,70 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h4,
     color: COLORS.textPrimary,
     marginBottom: SPACING.sm,
+    textAlign: 'center',
   },
   emptyText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    lineHeight: 22,
   },
 
   // Routes Container
   routesContainer: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxxl,
+    gap: SPACING.md,
   },
 
-  // Route Card - NEW GRADIENT STYLE
-  routeCardWrapper: {
-    marginBottom: SPACING.md,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
+  // Sort Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  sortModalContent: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxl,
   },
-  routeCardGradient: {
-    borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    backgroundColor: '#FFFFFF',
-  },
-  routeCardBadge: {
+  sortModalHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-    alignSelf: 'flex-start',
-    marginBottom: SPACING.sm,
-    backgroundColor: '#E8F5E9',
+    marginBottom: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  badgeAvailable: {
-    backgroundColor: '#E8F5E9',
-  },
-  badgeFull: {
-    backgroundColor: '#FFEBEE',
-  },
-  routeCardBadgeText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  routeCardType: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.primary + '15',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  routeCardTypeText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  routeCardRouteSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  routeCardOrigin: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  routeCardDestination: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  routeCardLocationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  routeCardLocationText: {
-    flex: 1,
-  },
-  routeCardLocationLabel: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
-    fontSize: 10,
-  },
-  routeCardLocationName: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.text,
+  sortModalTitle: {
+    ...TYPOGRAPHY.h4,
+    color: COLORS.textPrimary,
     fontWeight: '700',
   },
-  routeCardArrow: {
-    paddingHorizontal: SPACING.sm,
-    marginHorizontal: SPACING.xs,
-  },
-  routeCardFooterSection: {
+  sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: SPACING.sm,
-    marginTop: SPACING.sm,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
   },
-  routeCardFooterItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  routeCardFooterText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.text,
-    fontWeight: '600',
-    flex: 1,
-  },
-  routeCardFooterDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: SPACING.md,
-  },
-  routeCardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    backgroundColor: '#F3F4F6',
-    borderBottomLeftRadius: RADIUS.xl,
-    borderBottomRightRadius: RADIUS.xl,
-  },
-  routeCardAvailability: {
-    flex: 1,
+  sortOptionActive: {
+    backgroundColor: COLORS.primary + '08',
+    marginHorizontal: -SPACING.md,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
     borderRadius: RADIUS.md,
   },
-  availabilityOk: {
-    backgroundColor: COLORS.success + '20',
-  },
-  availabilityLow: {
-    backgroundColor: COLORS.warning + '20',
-  },
-  availabilityFull: {
-    backgroundColor: COLORS.error + '20',
-  },
-  availabilityText: {
-    ...TYPOGRAPHY.label,
-    fontWeight: '600',
-  },
-  availabilityTextOk: {
-    color: COLORS.success,
-  },
-  availabilityTextLow: {
-    color: COLORS.warning,
-  },
-  availabilityTextFull: {
-    color: COLORS.error,
-  },
-  routeCardCTA: {
+  sortOptionText: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: SPACING.xs,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
   },
-  routeCardCTAText: {
-    ...TYPOGRAPHY.bodyMedium,
+  sortOptionTextActive: {
     color: COLORS.primary,
     fontWeight: '600',
-  },
-
-  // Driver & Vehicle Section
-  driverVehicleSection: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  driverVehicleRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  driverVehicleItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  driverVehicleLabel: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    fontSize: 10,
-  },
-  driverVehicleValue: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.text,
-    fontWeight: '600',
-    fontSize: 11,
-  },
-
-  // Deprecated styles (kept for compatibility)
-  routeCard: {
-    display: 'none',
-  },
-  routeCardHeader: {
-    display: 'none',
-  },
-  routePoints: {
-    display: 'none',
-  },
-  routeFrom: {
-    display: 'none',
-  },
-  arrowContainer: {
-    display: 'none',
-  },
-  routeTo: {
-    display: 'none',
-  },
-  routePrice: {
-    display: 'none',
-  },
-  routeDetails: {
-    display: 'none',
-  },
-  detailItem: {
-    display: 'none',
-  },
-  detailText: {
-    display: 'none',
-  },
-  detailDivider: {
-    display: 'none',
-  },
-  seatsBadge: {
-    display: 'none',
-  },
-  seatsOk: {
-    display: 'none',
-  },
-  seatsLow: {
-    display: 'none',
-  },
-  seatsFull: {
-    display: 'none',
-  },
-  seatsText: {
-    display: 'none',
-  },
-  seatsTextOk: {
-    display: 'none',
-  },
-  seatsTextLow: {
-    display: 'none',
-  },
-  seatsTextFull: {
-    display: 'none',
-  },
-  routeFooter: {
-    display: 'none',
-  },
-  ctaText: {
-    display: 'none',
   },
 })

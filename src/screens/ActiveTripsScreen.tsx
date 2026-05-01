@@ -18,6 +18,7 @@ import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
 import { notifyTripCancellation } from '../services/pushNotifications'
 import Toast from '../components/Toast'
+import { TripMessagesModal } from '../components/TripMessagesModal'
 
 interface ActiveTrip {
   id: string
@@ -49,6 +50,7 @@ export default function ActiveTripsScreen() {
     message: '',
     type: 'info' as 'success' | 'error' | 'info' | 'warning',
   })
+  const [selectedTripForChat, setSelectedTripForChat] = useState<ActiveTrip | null>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -252,8 +254,8 @@ export default function ActiveTripsScreen() {
   }
 
   const handleContactDriver = (trip: ActiveTrip) => {
-    // Navegar a chat con el conductor
-    navigation.navigate('Chat', { driverId: trip.driverId, driverName: trip.driverName })
+    // Abrir modal de chat contextual para el viaje
+    setSelectedTripForChat(trip)
   }
 
   const handleTrackTrip = (trip: ActiveTrip) => {
@@ -432,6 +434,18 @@ export default function ActiveTripsScreen() {
           onRefresh={handleRefresh}
           refreshing={refreshing}
           showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* Modal de mensajes del viaje */}
+      {selectedTripForChat && (
+        <TripMessagesModal
+          visible={!!selectedTripForChat}
+          tripId={selectedTripForChat.id}
+          userId={user?.id || ''}
+          otherUserId={selectedTripForChat.driverId}
+          otherUserName={selectedTripForChat.driverName}
+          onClose={() => setSelectedTripForChat(null)}
         />
       )}
 
