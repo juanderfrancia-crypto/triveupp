@@ -1,111 +1,139 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Image,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
+  ActivityIndicator, Image, Modal, Animated, Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as ImagePicker from 'expo-image-picker'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { COLORS, SPACING, RADIUS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useProfile } from '../hooks/useProfile'
 import { useAuth } from '../hooks/useAuth'
 import { usePassengerStats } from '../hooks/usePassengerStats'
+import { useDriverEarnings } from '../hooks/useDriverEarnings'
 import Toast from '../components/Toast'
-import { uploadProfilePhoto, uploadVehiclePhoto } from '../services/photoUpload'
+import { uploadProfilePhoto } from '../services/photoUpload'
+import { supabase } from '../services/supabase'
 
+const { width: SCREEN_W } = Dimensions.get('window')
+const DRAWER_W = Math.min(SCREEN_W * 0.78, 310)
+const BARS = [0.45, 0.7, 0.55, 0.88, 0.65, 0.92, 0.5]
+
+// ── Drawer item ───────────────────────────────────────────────────────────────
+function DrawerItem({ icon, label, onPress, color }: {
+  icon: string; label: string; onPress: () => void; color?: string
+}) {
+  return (
+    <TouchableOpacity style={dr.item} onPress={onPress} activeOpacity={0.65}>
+      <Ionicons name={icon as any} size={20} color={color ?? COLORS.textSecondary} />
+      <Text style={[dr.itemLabel, color && { color }]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const navigation = useNavigation()
+  const navigation   = useNavigation<any>()
   const { user, logout: logoutStore } = useAppStore()
   const { logout: logoutAuth } = useAuth()
-  const { profile, loading, switchRole, fetchProfile } = useProfile(user?.id)
-  const { stats: passengerStats, loading: statsLoading, refetch: refetchStats } = usePassengerStats(user?.id)
+  const { profile, loading: profileLoading, switchRole, fetchProfile } = useProfile(user?.id)
 
-  const [isDriver, setIsDriver]                     = useState(false)
-  const [isLoading, setIsLoading]                   = useState(false)
-  const [uploadingPhoto, setUploadingPhoto]         = useState(false)
-  const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false)
-  const [vehiclePhotoError, setVehiclePhotoError]   = useState(false)
-  const [shouldLogout, setShouldLogout]             = useState(false)
-  const [toastVisible, setToastVisible]             = useState(false)
-  const [toastMessage, setToastMessage]             = useState('')
-  const [toastType, setToastType]                   = useState<'success' | 'error' | 'info'>('success')
+  const [isDriver, setIsDriver]           = useState(() => user?.role === 'driver')
+  const [isLoading, setIsLoading]         = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [shouldLogout, setShouldLogout]   = useState(false)
+  const [drawerOpen, setDrawerOpen]       = useState(false)
+  const [toastVisible, setToastVisible]   = useState(false)
+  const [toastMessage, setToastMessage]   = useState('')
+  const [toastType, setToastType]         = useState<'success' | 'error' | 'info'>('success')
+  const [driverVehicle, setDriverVehicle] = useState<any>(null)
+  const [recentRoutes, setRecentRoutes]   = useState<any[]>([])
 
+  const drawerAnim  = useRef(new Animated.Value(-DRAWER_W)).current
+  const overlayAnim = useRef(new Animated.Value(0)).current
+
+  // Hooks called unconditionally, ID gated
+  const { earnings, loadEarnings } = useDriverEarnings(isDriver ? user?.id : undefined)
+  const { stats: passengerStats, refetch: refetchStats } = usePassengerStats(!isDriver ? user?.id : undefined)
+
+  // ── Role sync ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (profile?.role) setIsDriver(profile.role === 'driver')
   }, [profile?.role])
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!isDriver) refetchStats()
-    }, [isDriver, refetchStats])
-  )
+  useEffect(() => {
+    if (!profile && user?.role) setIsDriver(user.role === 'driver')
+  }, [user?.role, profile])
 
+  // ── Focus refresh ──────────────────────────────────────────────────────────
+  useFocusEffect(useCallback(() => {
+    if (isDriver && user?.id) {
+      loadEarnings()
+      loadDriverData()
+    } else {
+      refetchStats()
+    }
+  }, [isDriver, user?.id]))
+
+  // ── Driver vehicle + route history ─────────────────────────────────────────
+  const loadDriverData = useCallback(async () => {
+    if (!user?.id) return
+    const [{ data: route }, { data: routes }] = await Promise.all([
+      supabase
+        .from('routes')
+        .select('vehicle_make, vehicle_model, vehicle_plate, vehicle_type')
+        .eq('driver_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('routes')
+        .select('id, origin, destination, departure_time, price_per_seat, status, total_seats')
+        .eq('driver_id', user.id)
+        .order('departure_time', { ascending: false })
+        .limit(4),
+    ])
+    if (route) setDriverVehicle(route)
+    setRecentRoutes(routes ?? [])
+  }, [user?.id])
+
+  // ── Logout ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (shouldLogout) { performLogout(); setShouldLogout(false) }
   }, [shouldLogout])
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToastMessage(message); setToastType(type); setToastVisible(true)
+  const handleLogout = () =>
+    Alert.alert('Cerrar Sesión', '¿Estás seguro?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar', style: 'destructive', onPress: () => setShouldLogout(true) },
+    ], { cancelable: false })
+
+  const performLogout = async () => {
+    try { showToast('Cerrando sesión...', 'info'); await logoutAuth(); logoutStore() }
+    catch { logoutStore() }
   }
 
   // ── Role switch ────────────────────────────────────────────────────────────
-  const handleRoleSwitch = async (newRole: 'driver' | 'passenger') => {
+  const handleBecomeDriver = () => navigation.navigate('DriverOnboarding')
+
+  const handleSwitchToPassenger = async () => {
     if (!user?.id || isLoading) return
-    if (newRole === 'driver' && !isDriver) {
-      navigation.navigate('DriverOnboarding' as never); return
-    }
     try {
       setIsLoading(true)
-      const result = await switchRole(user.id, newRole)
-      if (result) {
-        setIsDriver(result.role === 'driver')
-        showToast(`Ahora eres ${newRole === 'driver' ? 'conductor' : 'pasajero'}`)
-      }
-    } catch {
-      Alert.alert('Error', 'No se pudo cambiar el rol. Intenta de nuevo.')
-    } finally {
-      setIsLoading(false)
-    }
+      const result = await switchRole(user.id, 'passenger')
+      if (result) { setIsDriver(false); showToast('Ahora eres pasajero') }
+    } catch { Alert.alert('Error', 'No se pudo cambiar el rol.') }
+    finally { setIsLoading(false) }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-  const handleLogout = () => {
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro de cerrar sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Cerrar', style: 'destructive', onPress: () => setShouldLogout(true) },
-      ],
-      { cancelable: false }
-    )
-  }
-
-  const performLogout = async () => {
-    try {
-      showToast('Cerrando sesión...', 'info')
-      await logoutAuth()
-      logoutStore()
-    } catch {
-      logoutStore()
-    }
-  }
-
-  // ── Photo uploads ──────────────────────────────────────────────────────────
+  // ── Photo ──────────────────────────────────────────────────────────────────
   const handleProfilePhotoUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'] as any,
-        allowsEditing: true, aspect: [1, 1], quality: 0.8,
+        mediaTypes: ['images'] as any, allowsEditing: true, aspect: [1, 1], quality: 0.8,
       })
       if (!result.canceled && result.assets[0] && user?.id) {
         setUploadingPhoto(true)
@@ -113,618 +141,697 @@ export default function ProfileScreen() {
         await fetchProfile(user.id)
         showToast('Foto de perfil actualizada')
       }
-    } catch (error: any) {
-      showToast(error.message || 'Error al subir la foto', 'error')
-    } finally {
-      setUploadingPhoto(false)
-    }
+    } catch (e: any) { showToast(e.message || 'Error al subir la foto', 'error') }
+    finally { setUploadingPhoto(false) }
   }
 
-  const handleVehiclePhotoUpload = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'] as any,
-        allowsEditing: true, aspect: [4, 3], quality: 0.8,
-      })
-      if (!result.canceled && result.assets[0] && user?.id) {
-        setUploadingVehiclePhoto(true)
-        await uploadVehiclePhoto(user.id, null, result.assets[0].uri)
-        await fetchProfile(user.id)
-        showToast('Foto del vehículo actualizada')
-      }
-    } catch (error: any) {
-      showToast(error.message || 'Error al subir la foto', 'error')
-    } finally {
-      setUploadingVehiclePhoto(false)
-    }
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(msg); setToastType(type); setToastVisible(true)
   }
 
-  const showPhotoOptions = () =>
-    Alert.alert('Foto de Perfil', '¿Qué deseas hacer?', [
-      { text: 'Cambiar foto', onPress: handleProfilePhotoUpload },
-      { text: 'Cancelar', style: 'cancel' },
-    ])
+  // ── Drawer ─────────────────────────────────────────────────────────────────
+  const openDrawer = () => {
+    setDrawerOpen(true)
+    drawerAnim.setValue(-DRAWER_W); overlayAnim.setValue(0)
+    Animated.parallel([
+      Animated.spring(drawerAnim, { toValue: 0, damping: 22, stiffness: 220, useNativeDriver: true }),
+      Animated.timing(overlayAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
+    ]).start()
+  }
 
-  const showVehiclePhotoOptions = () =>
-    Alert.alert('Foto del Vehículo', '¿Qué deseas hacer?', [
-      { text: 'Cargar foto', onPress: handleVehiclePhotoUpload },
-      { text: 'Cancelar', style: 'cancel' },
-    ])
+  const closeDrawer = (cb?: () => void) => {
+    Animated.parallel([
+      Animated.timing(drawerAnim, { toValue: -DRAWER_W, duration: 220, useNativeDriver: true }),
+      Animated.timing(overlayAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start(() => { setDrawerOpen(false); cb?.() })
+  }
 
-  // ── Derived values ─────────────────────────────────────────────────────────
+  const drawerNav = (screen: string) => closeDrawer(() => navigation.navigate(screen))
+
+  // ── Derived ────────────────────────────────────────────────────────────────
   const avatarUri  = user?.avatar_url || profile?.avatar_url
-  const totalTrips = isDriver ? (profile?.total_trips ?? 0) : (passengerStats?.totalTrips ?? 0)
-  const rating     = profile?.rating?.toFixed(1) ?? '0.0'
+  const initials   = (user?.name || 'U').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+  const rating     = (profile?.rating ?? 0).toFixed(1)
+  const yearsOnApp = profile?.created_at
+    ? Math.max(1, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (365.25 * 24 * 60 * 60 * 1000)))
+    : 1
+  const membershipLabels: Record<string, string> = {
+    premium: 'USUARIO PREMIUM', basic: 'USUARIO BÁSICO', vip: 'USUARIO VIP', free: 'PASAJERO'
+  }
+  const membershipLabel = membershipLabels[user?.membership_type ?? 'free'] ?? 'PASAJERO'
 
-  // ── Avatar renderer ────────────────────────────────────────────────────────
-  const renderAvatar = () => (
-    <TouchableOpacity style={styles.avatarWrap} onPress={showPhotoOptions} disabled={uploadingPhoto} activeOpacity={0.85}>
-      {uploadingPhoto ? (
-        <View style={styles.avatarPlaceholder}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : avatarUri ? (
-        <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
-      ) : (
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarInitial}>{(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+  // ── Avatar ─────────────────────────────────────────────────────────────────
+  const AvatarCircle = ({ size = 80, showBadge = true }: { size?: number; showBadge?: boolean }) => (
+    <TouchableOpacity
+      style={[s.avatarWrap, { width: size, height: size, borderRadius: size / 2 }]}
+      onPress={handleProfilePhotoUpload}
+      disabled={uploadingPhoto}
+      activeOpacity={0.85}
+    >
+      {uploadingPhoto
+        ? <View style={[s.avatarBg, { borderRadius: size / 2 }]}><ActivityIndicator color="#fff" /></View>
+        : avatarUri
+          ? <Image source={{ uri: avatarUri }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+          : <LinearGradient colors={[COLORS.primaryDark, '#0a2a6e']} style={[s.avatarBg, { borderRadius: size / 2 }]}>
+              <Text style={[s.avatarInitial, { fontSize: size * 0.35 }]}>{initials}</Text>
+            </LinearGradient>
+      }
+      {showBadge && (
+        <View style={s.avatarBadge}>
+          {isDriver
+            ? <Ionicons name="checkmark-circle" size={18} color="#F59E0B" />
+            : <Ionicons name="settings" size={13} color="#fff" />
+          }
         </View>
       )}
-      <View style={styles.cameraBadge}>
-        <Ionicons name="camera" size={14} color="#fff" />
-      </View>
     </TouchableOpacity>
   )
 
-  // ─────────────────────────────────────────────────────────────────────────
-  return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-        {/* ══ HERO GRADIENT HEADER ════════════════════════════════════════ */}
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroBg}
-        >
-          {/* Top row */}
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroTopSpacer} />
-            <Text style={styles.heroScreenTitle}>Mi Perfil</Text>
-            <TouchableOpacity
-              style={styles.settingsBtn}
-              onPress={() => navigation.navigate('Settings' as never)}
-            >
-              <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.9)" />
-            </TouchableOpacity>
+  // ── PASSENGER VIEW ────────────────────────────────────────────────────────
+  const PassengerView = () => (
+    <>
+      {/* Profile row */}
+      <View style={pv.profileRow}>
+        <AvatarCircle size={72} />
+        <View style={pv.profileInfo}>
+          <Text style={pv.name} numberOfLines={1}>{user?.name || 'Usuario'}</Text>
+          <View style={pv.premiumBadge}>
+            <Ionicons name="star" size={11} color="#92400E" />
+            <Text style={pv.premiumText}>{membershipLabel}</Text>
           </View>
+        </View>
+      </View>
 
-          {/* Avatar + info */}
-          <View style={styles.heroBody}>
-            {renderAvatar()}
-            <Text style={styles.heroName}>{user?.name || 'Usuario'}</Text>
-            <Text style={styles.heroEmail}>{user?.email || ''}</Text>
-            <View style={styles.heroRatingRow}>
-              <Ionicons name="star" size={14} color="#FBBF24" />
-              <Text style={styles.heroRating}>{rating}</Text>
-              <Text style={styles.heroRatingDot}>·</Text>
-              <Text style={styles.heroTrips}>{totalTrips} viajes</Text>
+      {/* CTA card */}
+      <View style={s.section}>
+        <TouchableOpacity onPress={handleBecomeDriver} activeOpacity={0.88}>
+          <LinearGradient colors={[COLORS.primaryDark, '#0a2a6e']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={pv.ctaCard}>
+            <View style={pv.ctaOportunidad}>
+              <Text style={pv.ctaOportunidadText}>OPORTUNIDAD</Text>
+            </View>
+            <Text style={pv.ctaTitle}>Gana dinero con{'\n'}Trive</Text>
+            <Text style={pv.ctaSub}>Convierte tu tiempo libre en ingresos extra manejando con nosotros.</Text>
+            <View style={pv.ctaBtn}>
+              <Text style={pv.ctaBtnText}>Cambiar a modo Conductor</Text>
+            </View>
+            <Ionicons name="car-sport" size={100} color="rgba(255,255,255,0.1)" style={pv.ctaCar} />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick stats: Mis Viajes + Documentos */}
+      <View style={s.section}>
+        <View style={pv.statsRow}>
+          <TouchableOpacity style={pv.statCard} onPress={() => navigation.navigate('TripHistory')} activeOpacity={0.8}>
+            <View style={pv.statIcon}><Ionicons name="time-outline" size={24} color={COLORS.primary} /></View>
+            <Text style={pv.statTitle}>Mis Viajes</Text>
+            <Text style={pv.statSub}>{passengerStats?.totalTrips ?? 0} completados</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={pv.statCard} onPress={() => navigation.navigate('DriverDocuments')} activeOpacity={0.8}>
+            <View style={pv.statIcon}><Ionicons name="document-text-outline" size={24} color={COLORS.primary} /></View>
+            <Text style={pv.statTitle}>Documentos</Text>
+            <Text style={pv.statSub}>Verificados</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Métodos de pago */}
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>MÉTODOS DE PAGO</Text>
+        <View style={s.menuCard}>
+          <TouchableOpacity style={pv.payRow} onPress={() => navigation.navigate('PaymentMethods')} activeOpacity={0.7}>
+            <View style={[pv.payIcon, { backgroundColor: '#FFE4EC' }]}>
+              <Ionicons name="wallet-outline" size={20} color="#E91E63" />
+            </View>
+            <View style={pv.payInfo}>
+              <Text style={pv.payName}>Nequi</Text>
+              <Text style={pv.paySub}>Principal</Text>
+            </View>
+            <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+          </TouchableOpacity>
+
+          <View style={s.divider} />
+
+          <TouchableOpacity style={pv.payRow} onPress={() => navigation.navigate('PaymentMethods')} activeOpacity={0.7}>
+            <View style={[pv.payIcon, { backgroundColor: '#F3F4F6' }]}>
+              <Ionicons name="cash-outline" size={20} color="#4B5563" />
+            </View>
+            <View style={pv.payInfo}>
+              <Text style={pv.payName}>Efectivo</Text>
+              <Text style={pv.paySub}>Pago al finalizar</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Centro de Ayuda */}
+      <View style={s.section}>
+        <TouchableOpacity style={s.menuCard} onPress={() => navigation.navigate('Help')} activeOpacity={0.8}>
+          <View style={pv.helpRow}>
+            <View style={pv.helpIcon}><Ionicons name="headset" size={22} color="#B45309" /></View>
+            <View style={pv.helpText}>
+              <Text style={pv.payName}>Centro de Ayuda</Text>
+              <Text style={pv.paySub}>Soporte 24/7 disponible</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Footer */}
+      <Text style={pv.footer}>TRIVE V4.2.0 • HECHO CON SEGURIDAD</Text>
+      <View style={{ height: SPACING.xxxl }} />
+    </>
+  )
+
+  // ── DRIVER VIEW ───────────────────────────────────────────────────────────
+  const DriverView = () => {
+    const vehicleName = driverVehicle
+      ? [driverVehicle.vehicle_make, driverVehicle.vehicle_model].filter(Boolean).join(' ') || 'Vehículo'
+      : '—'
+    const totalTrips = earnings?.completedTrips ?? profile?.total_trips ?? 0
+    const monthEarnings = earnings?.thisMonthEarnings ?? 0
+
+    return (
+      <>
+        {/* Hero card */}
+        <LinearGradient colors={[COLORS.primaryDark, '#0a2a6e']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={dv.hero}>
+          <View style={dv.heroAvatar}>
+            <AvatarCircle size={90} showBadge={false} />
+            <View style={dv.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={22} color="#F59E0B" />
             </View>
           </View>
-
-          {/* Curved white bottom */}
-          <View style={styles.heroCurve} />
+          <Text style={dv.heroName}>{user?.name || 'Conductor'}</Text>
+          <View style={dv.conductorBadge}>
+            <Text style={dv.conductorBadgeText}>CONDUCTOR VERIFICADO</Text>
+          </View>
+          <View style={dv.heroStats}>
+            <View style={dv.heroStat}>
+              <Ionicons name="star" size={14} color="#FBBF24" />
+              <Text style={dv.heroStatVal}>{rating}</Text>
+            </View>
+            <View style={dv.heroStatSep} />
+            <View style={dv.heroStat}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.7)" />
+              <Text style={dv.heroStatVal}>{yearsOnApp} {yearsOnApp === 1 ? 'año' : 'años'} en Trive</Text>
+            </View>
+            <View style={dv.heroStatSep} />
+            <View style={dv.heroStat}>
+              <Ionicons name="car-outline" size={14} color="rgba(255,255,255,0.7)" />
+              <Text style={dv.heroStatVal}>{totalTrips} viajes</Text>
+            </View>
+          </View>
         </LinearGradient>
 
-        {/* ══ ROLE SELECTOR ═══════════════════════════════════════════════ */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ROL ACTUAL</Text>
-          <View style={styles.roleToggle}>
-            <TouchableOpacity
-              style={[styles.roleBtn, !isDriver && styles.roleBtnActive]}
-              onPress={() => handleRoleSwitch('passenger')}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={!isDriver ? 'person' : 'person-outline'} size={18} color={!isDriver ? '#fff' : COLORS.textSecondary} />
-              <Text style={[styles.roleBtnText, !isDriver && styles.roleBtnTextActive]}>Pasajero</Text>
+        {/* Ganancias del mes */}
+        <View style={s.section}>
+          <View style={dv.earningsCard}>
+            <Text style={dv.earningsLabel}>GANANCIAS DEL MES</Text>
+            <Text style={dv.earningsAmount}>
+              ${monthEarnings.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+            {/* Bar chart */}
+            <View style={dv.barsRow}>
+              {BARS.map((h, i) => (
+                <View key={i} style={dv.barWrap}>
+                  <View style={[dv.bar, { height: 40 * h, backgroundColor: i === 5 ? COLORS.primaryDark : `${COLORS.primaryDark}55` }]} />
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity style={dv.detailsBtn} onPress={() => navigation.navigate('Earnings')} activeOpacity={0.7}>
+              <Text style={dv.detailsText}>Ver detalles</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.primary} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.roleBtn, isDriver && styles.roleBtnActive]}
-              onPress={() => handleRoleSwitch('driver')}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={isDriver ? 'car' : 'car-outline'} size={18} color={isDriver ? '#fff' : COLORS.textSecondary} />
-              <Text style={[styles.roleBtnText, isDriver && styles.roleBtnTextActive]}>Conductor</Text>
-            </TouchableOpacity>
-            {isLoading && <ActivityIndicator size="small" color={COLORS.primary} style={StyleSheet.absoluteFillObject} />}
           </View>
         </View>
 
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+        {/* Viajes completados */}
+        <View style={s.section}>
+          <View style={dv.tripsCard}>
+            <View style={dv.tripsIcon}><Ionicons name="swap-horizontal-outline" size={22} color={COLORS.primary} /></View>
+            <Text style={dv.tripsLabel}>VIAJES COMPLETADOS</Text>
+            <View style={dv.tripsCountRow}>
+              <Text style={dv.tripsCount}>{totalTrips}</Text>
+              {(earnings?.pendingAmount ?? 0) > 0 && (
+                <View style={dv.tripsTodayPill}>
+                  <Text style={dv.tripsTodayText}>+pendientes</Text>
+                </View>
+              )}
+            </View>
+            <Text style={dv.tripsMotivation}>
+              {totalTrips > 0
+                ? `Llevas ${totalTrips} viajes completados. ¡Sigue así!`
+                : 'Completa tu primer viaje para empezar a ganar.'}
+            </Text>
           </View>
-        ) : !isDriver ? (
-          <>
-            {/* ── STATS ────────────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>MI ACTIVIDAD</Text>
-              <View style={styles.statsRow}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{passengerStats?.totalTrips ?? 0}</Text>
-                  <Text style={styles.statLabel}>Viajes</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>
-                    ${(passengerStats?.totalSpent ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}
-                  </Text>
-                  <Text style={styles.statLabel}>Gastado</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{rating}</Text>
-                  <Text style={styles.statLabel}>Rating</Text>
-                </View>
-              </View>
-            </View>
+        </View>
 
-            {/* ── CUENTA ───────────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>CUENTA</Text>
-              <View style={styles.menuCard}>
-                <MenuItem icon="location-outline" label="Mis direcciones"   onPress={() => navigation.navigate('SavedAddresses' as never)} />
-                <MenuDivider />
-                <MenuItem icon="card-outline"     label="Métodos de pago"  onPress={() => navigation.navigate('PaymentMethods' as never)} />
-                <MenuDivider />
-                <MenuItem icon="notifications-outline" label="Notificaciones" onPress={() => navigation.navigate('Notifications' as never)} />
-                <MenuDivider />
-                <MenuItem icon="shield-checkmark-outline" label="Seguridad" onPress={() => navigation.navigate('Security' as never)} last />
-              </View>
-            </View>
-
-            {/* ── MIS VIAJES ───────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>MIS VIAJES</Text>
-              <View style={styles.menuCard}>
-                <MenuItem icon="navigate-circle-outline" iconColor={COLORS.success} label="Viajes Activos"     onPress={() => navigation.navigate('ActiveTrips' as never)} />
-                <MenuDivider />
-                <MenuItem icon="time-outline"            label="Historial de Viajes" onPress={() => navigation.navigate('TripHistory' as never)} />
-                <MenuDivider />
-                <MenuItem icon="star-outline"            iconColor={COLORS.warning}  label="Reseñas y Ratings" onPress={() => navigation.navigate('Reviews' as never)} last />
-              </View>
-            </View>
-
-            {/* ── DRIVER CTA ───────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <TouchableOpacity style={styles.driverCta} onPress={() => handleRoleSwitch('driver')} activeOpacity={0.88}>
-                <LinearGradient
-                  colors={[`${COLORS.primary}12`, `${COLORS.primary}06`]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={styles.driverCtaInner}
-                >
-                  <View style={styles.driverCtaIcon}>
-                    <Ionicons name="car" size={24} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.driverCtaText}>
-                    <Text style={styles.driverCtaTitle}>Conviértete en conductor</Text>
-                    <Text style={styles.driverCtaSub}>Empieza a ganar dinero ahora</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          <>
-            {/* ── VEHICLE PHOTO ────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>MI VEHÍCULO</Text>
-              <TouchableOpacity
-                style={styles.vehiclePhotoContainer}
-                onPress={showVehiclePhotoOptions}
-                disabled={uploadingVehiclePhoto}
-                activeOpacity={0.85}
-              >
-                {uploadingVehiclePhoto ? (
-                  <View style={styles.vehiclePhotoEmpty}>
-                    <ActivityIndicator size="large" color={COLORS.primary} />
-                  </View>
-                ) : profile?.vehicle_photo_url && !vehiclePhotoError ? (
-                  <>
-                    <Image
-                      source={{ uri: profile.vehicle_photo_url }}
-                      style={styles.vehiclePhotoImg}
-                      onError={() => setVehiclePhotoError(true)}
-                      onLoad={() => setVehiclePhotoError(false)}
-                    />
-                    <View style={styles.vehiclePhotoBadge}>
-                      <Ionicons name="camera" size={22} color="#fff" />
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.vehiclePhotoEmpty}>
-                    <Ionicons name="car" size={48} color={COLORS.primary} />
-                    <Text style={styles.vehiclePhotoEmptyText}>Agregar foto del vehículo</Text>
-                    <Text style={styles.vehiclePhotoEmptySub}>Toca para seleccionar</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* ── CONDUCTOR MENU ───────────────────────────────────────── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>GESTIÓN</Text>
-              <View style={styles.menuCard}>
-                <MenuItem icon="car-outline"           label="Mi vehículo"    onPress={() => navigation.navigate('VehicleInfo' as never)} />
-                <MenuDivider />
-                <MenuItem icon="document-text-outline" label="Documentos"     onPress={() => navigation.navigate('DriverDocuments' as never)} />
-                <MenuDivider />
-                <MenuItem icon="wallet-outline"        label="Ganancias"      onPress={() => navigation.navigate('Earnings' as never)} />
-                <MenuDivider />
-                <MenuItem icon="stats-chart-outline"   label="Estadísticas"   onPress={() => navigation.navigate('Stats' as never)} last />
-              </View>
-            </View>
-
-            {/* ── ACTIONS ──────────────────────────────────────────────── */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => navigation.navigate('DriverRegister' as never)}
-                activeOpacity={0.88}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                <Text style={styles.primaryBtnText}>Crear Nueva Ruta</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => navigation.navigate('DriverPanel' as never)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
-                <Text style={styles.secondaryBtnText}>Panel del Conductor</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {/* ── ADMIN ───────────────────────────────────────────────────────── */}
-        {profile?.role === 'support' && (
-          <View style={styles.section}>
-            <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('AdminDocuments' as never)} activeOpacity={0.8}>
-              <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
-              <Text style={styles.adminBtnText}>Verificar Documentos</Text>
-            </TouchableOpacity>
+        {/* Mi Vehículo */}
+        <View style={s.section}>
+          <View style={s.sectionTitleRow}>
+            <Text style={s.sectionTitle}>Mi Vehículo</Text>
+            <Ionicons name="car-outline" size={20} color={COLORS.textTertiary} />
           </View>
-        )}
+          <Text style={s.sectionSub}>Información técnica activa</Text>
 
-        {/* ── LOGOUT ──────────────────────────────────────────────────────── */}
-        <View style={[styles.section, { marginBottom: SPACING.xxxl }]}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
-            <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
-            <Text style={styles.logoutText}>Cerrar Sesión</Text>
+          <View style={dv.vehicleCard}>
+            {profile?.vehicle_photo_url ? (
+              <Image source={{ uri: profile.vehicle_photo_url }} style={dv.vehiclePhoto} />
+            ) : (
+              <View style={dv.vehiclePhotoEmpty}>
+                <Ionicons name="car" size={36} color={COLORS.primary} />
+              </View>
+            )}
+            <View style={dv.vehicleInfo}>
+              <Text style={dv.vehicleName}>{vehicleName}</Text>
+              {driverVehicle?.vehicle_plate && (
+                <Text style={dv.vehiclePlate}>{driverVehicle.vehicle_plate}</Text>
+              )}
+              <View style={dv.vehicleStatus}>
+                <View style={dv.statusDot} />
+                <Text style={dv.statusText}>ESTADO: ÓPTIMO</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Documentos del conductor */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Documentos del Conductor</Text>
+          <View style={s.menuCard}>
+            <View style={dv.docRow}>
+              <View style={dv.docIcon}><Ionicons name="document-text-outline" size={20} color={COLORS.primary} /></View>
+              <View style={dv.docInfo}>
+                <Text style={dv.docTitle}>SOAT Vigente</Text>
+                <Text style={dv.docSub}>{profile?.is_driver_verified ? 'Documento vigente' : 'Pendiente de verificación'}</Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={22} color={profile?.is_driver_verified ? COLORS.success : COLORS.textTertiary} />
+            </View>
+            <View style={s.divider} />
+            <View style={dv.docRow}>
+              <View style={dv.docIcon}><Ionicons name="id-card-outline" size={20} color={COLORS.primary} /></View>
+              <View style={dv.docInfo}>
+                <Text style={dv.docTitle}>Licencia de Conducir</Text>
+                <Text style={dv.docSub}>{profile?.is_driver_verified ? 'Verificada' : 'En revisión'}</Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={22} color={profile?.is_driver_verified ? COLORS.success : COLORS.textTertiary} />
+            </View>
+          </View>
+          <TouchableOpacity style={dv.updateDocBtn} onPress={() => navigation.navigate('DriverDocuments')} activeOpacity={0.8}>
+            <Text style={dv.updateDocText}>Actualizar Documentación</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Historial de rutas */}
+        <View style={s.section}>
+          <View style={s.sectionTitleRow}>
+            <Text style={s.sectionTitle}>Historial de Rutas</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('TripHistory')} activeOpacity={0.7}>
+              <Text style={dv.seeAll}>Ver todo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentRoutes.length === 0 ? (
+            <View style={dv.emptyRoutes}>
+              <Ionicons name="map-outline" size={32} color={COLORS.textTertiary} />
+              <Text style={dv.emptyRoutesText}>No hay rutas recientes</Text>
+            </View>
+          ) : (
+            <View style={s.menuCard}>
+              {recentRoutes.map((route, idx) => (
+                <View key={route.id}>
+                  <View style={dv.routeRow}>
+                    <View style={dv.routeIcon}><Ionicons name="time-outline" size={18} color={COLORS.primary} /></View>
+                    <View style={dv.routeInfo}>
+                      <Text style={dv.routeName} numberOfLines={1}>
+                        {route.origin} → {route.destination}
+                      </Text>
+                      <Text style={dv.routeMeta}>
+                        {new Date(route.departure_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
+                        {' · '}
+                        {new Date(route.departure_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                        {route.total_seats ? ` · ${route.total_seats} puestos` : ''}
+                      </Text>
+                    </View>
+                    <View style={dv.routeRight}>
+                      <Text style={dv.routePrice}>${(route.price_per_seat ?? 0).toLocaleString('es-CO')}</Text>
+                      <View style={[dv.routeStatusPill, route.status === 'completed' && dv.routeStatusDone]}>
+                        <Text style={[dv.routeStatusText, route.status === 'completed' && dv.routeStatusTextDone]}>
+                          {route.status === 'completed' ? 'COMPLETADO' : route.status?.toUpperCase() ?? 'ACTIVO'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {idx < recentRoutes.length - 1 && <View style={s.divider} />}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: SPACING.xxxl }} />
+      </>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
+
+      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.headerBtn} onPress={openDrawer}>
+          <Ionicons name="menu" size={24} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.wordmark}>trive</Text>
+        <TouchableOpacity style={s.avatarHeaderBtn} onPress={handleProfilePhotoUpload}>
+          {avatarUri
+            ? <Image source={{ uri: avatarUri }} style={s.avatarHeaderImg} />
+            : <LinearGradient colors={[COLORS.primaryDark, '#0a2a6e']} style={s.avatarHeaderGrad}>
+                <Text style={s.avatarHeaderInitial}>{initials}</Text>
+              </LinearGradient>
+          }
+        </TouchableOpacity>
+      </View>
+
+      {/* ══ CONTENT ═════════════════════════════════════════════════════════ */}
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        {profileLoading && !profile
+          ? <View style={s.loadingBox}><ActivityIndicator size="large" color={COLORS.primary} /></View>
+          : isDriver ? <DriverView /> : <PassengerView />
+        }
       </ScrollView>
+
+      {/* ══ DRAWER ══════════════════════════════════════════════════════════ */}
+      <Modal visible={drawerOpen} transparent animationType="none" onRequestClose={() => closeDrawer()}>
+        <View style={{ flex: 1 }}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: overlayAnim }]} pointerEvents="none" />
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => closeDrawer()} activeOpacity={1} />
+          <Animated.View style={[dr.panel, { transform: [{ translateX: drawerAnim }] }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'bottom']}>
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                {/* Drawer header */}
+                <LinearGradient colors={[COLORS.primaryDark, '#0a2a6e']} style={dr.header}>
+                  {avatarUri
+                    ? <Image source={{ uri: avatarUri }} style={dr.avatar} />
+                    : <View style={dr.avatarPlaceholder}><Text style={dr.avatarInitial}>{initials}</Text></View>
+                  }
+                  <Text style={dr.name}>{user?.name || 'Usuario'}</Text>
+                  <Text style={dr.email}>{user?.email || ''}</Text>
+                  <View style={dr.rolePill}>
+                    <Ionicons name={isDriver ? 'car' : 'person'} size={11} color="#fff" />
+                    <Text style={dr.rolePillText}>{isDriver ? 'Conductor' : membershipLabel}</Text>
+                  </View>
+                </LinearGradient>
+
+                {/* Drawer sections */}
+                <Text style={dr.sectionLabel}>CUENTA</Text>
+                <DrawerItem icon="settings-outline"          label="Configuración"      onPress={() => drawerNav('Settings')} />
+                <DrawerItem icon="location-outline"          label="Mis Direcciones"    onPress={() => drawerNav('SavedAddresses')} />
+                <DrawerItem icon="notifications-outline"     label="Notificaciones"     onPress={() => drawerNav('Notifications')} />
+                <DrawerItem icon="shield-checkmark-outline"  label="Seguridad"          onPress={() => drawerNav('Security')} />
+
+                <View style={dr.sep} />
+                <Text style={dr.sectionLabel}>MIS VIAJES</Text>
+                <DrawerItem icon="navigate-circle-outline"  label="Viajes Activos"      onPress={() => drawerNav('ActiveTrips')} />
+                <DrawerItem icon="time-outline"             label="Historial de Viajes" onPress={() => drawerNav('TripHistory')} />
+                <DrawerItem icon="star-outline"             label="Reseñas y Ratings"   onPress={() => drawerNav('Reviews')} />
+
+                {isDriver && (
+                  <>
+                    <View style={dr.sep} />
+                    <Text style={dr.sectionLabel}>CONDUCTOR</Text>
+                    <DrawerItem icon="speedometer-outline"  label="Panel del Conductor" onPress={() => drawerNav('DriverPanel')} />
+                    <DrawerItem icon="add-circle-outline"   label="Crear Ruta"          onPress={() => drawerNav('DriverRegister')} />
+                    <DrawerItem icon="stats-chart-outline"  label="Estadísticas"        onPress={() => drawerNav('Stats')} />
+                    <DrawerItem icon="wallet-outline"       label="Ganancias"           onPress={() => drawerNav('Earnings')} />
+                    <View style={dr.sep} />
+                    <DrawerItem icon="person-outline" label="Cambiar a Pasajero" onPress={() => closeDrawer(handleSwitchToPassenger)} color={COLORS.textSecondary} />
+                  </>
+                )}
+
+                <View style={dr.sep} />
+                <Text style={dr.sectionLabel}>MÁS</Text>
+                <DrawerItem icon="information-circle-outline" label="Sobre Trive"    onPress={() => drawerNav('About')} />
+                <DrawerItem icon="help-circle-outline"        label="Centro de Ayuda" onPress={() => drawerNav('Help')} />
+
+                <View style={dr.sep} />
+                <TouchableOpacity style={dr.logoutRow} onPress={() => closeDrawer(handleLogout)} activeOpacity={0.7}>
+                  <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
+                  <Text style={dr.logoutText}>Cerrar Sesión</Text>
+                </TouchableOpacity>
+                <View style={{ height: SPACING.xl }} />
+              </ScrollView>
+            </SafeAreaView>
+          </Animated.View>
+        </View>
+      </Modal>
 
       <Toast visible={toastVisible} message={toastMessage} type={toastType} onHide={() => setToastVisible(false)} />
     </SafeAreaView>
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-interface MenuItemProps {
-  icon: string
-  label: string
-  onPress: () => void
-  iconColor?: string
-  last?: boolean
-}
-const MenuItem = ({ icon, label, onPress, iconColor, last }: MenuItemProps) => (
-  <TouchableOpacity style={[styles.menuItem, last && styles.menuItemLast]} onPress={onPress} activeOpacity={0.7}>
-    <View style={[styles.menuIcon, iconColor && { backgroundColor: `${iconColor}15` }]}>
-      <Ionicons name={icon as any} size={19} color={iconColor ?? COLORS.primary} />
-    </View>
-    <Text style={styles.menuText}>{label}</Text>
-    <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
-  </TouchableOpacity>
-)
-const MenuDivider = () => <View style={styles.menuDivider} />
+// ── Shared styles ─────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: COLORS.background },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: SPACING.lg },
+  loadingBox: { paddingVertical: 80, alignItems: 'center' },
 
-// ─────────────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: { paddingBottom: 40 },
-
-  // ── Hero ────────────────────────────────────────────────────────────────────
-  heroBg: {
-    paddingTop: SPACING.md,
-    paddingBottom: 0,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  heroTopSpacer: { width: 44 },
-  heroScreenTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.2,
-  },
-  settingsBtn: {
-    width: 44, height: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroBody: {
-    alignItems: 'center',
-    paddingBottom: SPACING.xl,
-    paddingTop: SPACING.sm,
-  },
-  avatarWrap: {
-    width: 90, height: 90,
-    borderRadius: 45,
-    marginBottom: SPACING.md,
-    position: 'relative',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.6)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  avatarImg: {
-    width: 84, height: 84,
-    borderRadius: 42,
-  },
-  avatarPlaceholder: {
-    width: 84, height: 84,
-    borderRadius: 42,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  cameraBadge: {
-    position: 'absolute',
-    bottom: 0, right: 0,
-    width: 26, height: 26,
-    borderRadius: 13,
-    backgroundColor: COLORS.primaryDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  heroName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  heroEmail: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: SPACING.sm,
-  },
-  heroRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  heroRating: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  heroRatingDot: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
-  heroTrips: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
-  heroCurve: {
-    height: 28,
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-
-  // ── Section ──────────────────────────────────────────────────────────────────
-  section: {
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textTertiary,
-    letterSpacing: 1,
-    marginBottom: SPACING.sm,
-  },
-
-  // ── Role Toggle ───────────────────────────────────────────────────────────────
-  roleToggle: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: RADIUS.md,
-    padding: 4,
-    gap: 4,
-  },
-  roleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: SPACING.sm, borderRadius: RADIUS.sm - 2,
-    gap: SPACING.sm,
-  },
-  roleBtnActive: {
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  roleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-  roleBtnTextActive: { color: '#fff' },
-
-  // ── Stats ─────────────────────────────────────────────────────────────────────
-  statsRow: {
-    flexDirection: 'row',
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3,
   },
-  statCard: {
-    flex: 1, alignItems: 'center',
-    paddingVertical: SPACING.lg,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: COLORS.borderLight,
-    marginVertical: SPACING.md,
-  },
-  statValue: {
-    fontSize: 20, fontWeight: '800',
-    color: COLORS.primary, letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12, fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
+  headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  wordmark:  { fontSize: 24, fontWeight: '800', color: COLORS.primary, letterSpacing: -1 },
+  avatarHeaderBtn: { width: 38, height: 38, borderRadius: 19, overflow: 'hidden' },
+  avatarHeaderImg: { width: 38, height: 38, borderRadius: 19 },
+  avatarHeaderGrad: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  avatarHeaderInitial: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
-  // ── Loading ───────────────────────────────────────────────────────────────────
-  loadingBox: {
-    paddingVertical: SPACING.xxxl,
-    alignItems: 'center',
-  },
+  section: { paddingHorizontal: SPACING.lg, marginTop: SPACING.lg },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 1, marginBottom: SPACING.sm },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
+  sectionSub:   { fontSize: 12, color: COLORS.textSecondary, paddingHorizontal: SPACING.lg, marginTop: 2, marginBottom: SPACING.sm },
+  sectionTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.lg, marginBottom: 4, marginTop: SPACING.lg },
 
-  // ── Menu Card ─────────────────────────────────────────────────────────────────
   menuCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, overflow: 'hidden',
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  divider: { height: 1, backgroundColor: COLORS.borderLight, marginLeft: 56 },
+
+  avatarWrap: { position: 'relative', borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 6 },
+  avatarBg:   { justifyContent: 'center', alignItems: 'center' },
+  avatarInitial: { fontWeight: '800', color: '#fff' },
+  avatarBadge: {
+    position: 'absolute', bottom: -2, right: -2,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: COLORS.primaryDark,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+})
+
+// ── Passenger view styles ─────────────────────────────────────────────────────
+const pv = StyleSheet.create({
+  profileRow: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.lg,
+    paddingHorizontal: SPACING.lg, paddingTop: SPACING.xl, paddingBottom: SPACING.lg,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  menuItem: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: SPACING.lg,
-    gap: SPACING.md,
+  profileInfo: { flex: 1 },
+  name: { fontSize: 21, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4, marginBottom: 6 },
+  premiumBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+    backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: RADIUS.full,
   },
-  menuItemLast: { borderBottomWidth: 0 },
-  menuDivider: { height: 1, backgroundColor: COLORS.borderLight, marginLeft: 68 },
-  menuIcon: {
-    width: 38, height: 38,
-    borderRadius: RADIUS.sm,
+  premiumText: { fontSize: 11, fontWeight: '800', color: '#92400E', letterSpacing: 0.3 },
+
+  ctaCard: { borderRadius: RADIUS.xl, overflow: 'hidden', padding: SPACING.xl, paddingBottom: SPACING.xxl },
+  ctaOportunidad: {
+    alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: SPACING.md, paddingVertical: 4,
+    borderRadius: RADIUS.full, marginBottom: SPACING.md,
+  },
+  ctaOportunidadText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.5 },
+  ctaTitle: { fontSize: 24, fontWeight: '800', color: '#fff', lineHeight: 30, letterSpacing: -0.5, marginBottom: SPACING.sm },
+  ctaSub:   { fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 18, marginBottom: SPACING.xl },
+  ctaBtn:   { alignSelf: 'stretch', backgroundColor: '#fff', borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center' },
+  ctaBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primaryDark },
+  ctaCar: { position: 'absolute', bottom: -15, right: -20 },
+
+  statsRow: { flexDirection: 'row', gap: SPACING.md },
+  statCard: {
+    flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    padding: SPACING.lg, gap: 6,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  statIcon: {
+    width: 44, height: 44, borderRadius: RADIUS.md,
     backgroundColor: `${COLORS.primary}12`,
     justifyContent: 'center', alignItems: 'center',
+    marginBottom: 4,
   },
-  menuText: {
-    flex: 1, fontSize: 15, fontWeight: '500',
-    color: COLORS.textPrimary,
-  },
+  statTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  statSub:   { fontSize: 12, color: COLORS.textSecondary },
 
-  // ── Driver CTA ────────────────────────────────────────────────────────────────
-  driverCta: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}25`,
+  payRow: { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, gap: SPACING.md },
+  payIcon: { width: 44, height: 44, borderRadius: RADIUS.md, justifyContent: 'center', alignItems: 'center' },
+  payInfo: { flex: 1 },
+  payName: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  paySub:  { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+
+  helpRow: { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, gap: SPACING.md },
+  helpIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center' },
+  helpText: { flex: 1 },
+
+  footer: {
+    textAlign: 'center', fontSize: 11, fontWeight: '600',
+    color: COLORS.textTertiary, letterSpacing: 0.5,
+    marginTop: SPACING.xl, marginBottom: SPACING.md,
   },
-  driverCtaInner: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: SPACING.lg, gap: SPACING.md,
+})
+
+// ── Driver view styles ────────────────────────────────────────────────────────
+const dv = StyleSheet.create({
+  hero: { padding: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.xxl, alignItems: 'center' },
+  heroAvatar: { position: 'relative', marginBottom: SPACING.md },
+  verifiedBadge: { position: 'absolute', bottom: -4, right: -4 },
+  heroName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.4, marginBottom: SPACING.sm },
+  conductorBadge: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: SPACING.md, paddingVertical: 5,
+    borderRadius: RADIUS.full, marginBottom: SPACING.lg,
   },
-  driverCtaIcon: {
-    width: 48, height: 48, borderRadius: RADIUS.md,
-    backgroundColor: `${COLORS.primary}18`,
+  conductorBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.8 },
+  heroStats: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  heroStat:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  heroStatVal: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
+  heroStatSep: { width: 1, height: 14, backgroundColor: 'rgba(255,255,255,0.25)' },
+
+  earningsCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  earningsLabel:  { fontSize: 11, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 1, marginBottom: SPACING.sm },
+  earningsAmount: { fontSize: 34, fontWeight: '900', color: COLORS.textPrimary, letterSpacing: -1, marginBottom: SPACING.lg },
+  barsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 44, marginBottom: SPACING.md },
+  barWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  bar:     { width: '100%', borderRadius: 4 },
+  detailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end' },
+  detailsText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+
+  tripsCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  tripsIcon: {
+    width: 44, height: 44, borderRadius: RADIUS.md,
+    backgroundColor: `${COLORS.primary}12`,
     justifyContent: 'center', alignItems: 'center',
+    marginBottom: SPACING.sm,
   },
-  driverCtaText: { flex: 1, gap: 3 },
-  driverCtaTitle: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
-  driverCtaSub:   { fontSize: 13, color: COLORS.textSecondary },
+  tripsLabel:    { fontSize: 11, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 1 },
+  tripsCountRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginVertical: 4 },
+  tripsCount:    { fontSize: 36, fontWeight: '900', color: COLORS.textPrimary, letterSpacing: -1 },
+  tripsTodayPill: {
+    backgroundColor: `${COLORS.success}15`, paddingHorizontal: SPACING.sm, paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  tripsTodayText:    { fontSize: 11, fontWeight: '700', color: COLORS.success },
+  tripsMotivation:   { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginTop: 4 },
 
-  // ── Vehicle Photo ─────────────────────────────────────────────────────────────
-  vehiclePhotoContainer: {
-    height: 200, borderRadius: RADIUS.lg,
-    backgroundColor: COLORS.surfaceAlt,
+  vehicleCard: {
+    flexDirection: 'row', gap: SPACING.md,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1, borderColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12, elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
-  vehiclePhotoImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-  vehiclePhotoEmpty: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', gap: SPACING.sm,
-  },
-  vehiclePhotoEmptyText: { fontSize: 15, fontWeight: '600', color: COLORS.textSecondary },
-  vehiclePhotoEmptySub:  { fontSize: 13, color: COLORS.textTertiary },
-  vehiclePhotoBadge: {
-    position: 'absolute', bottom: SPACING.md, right: SPACING.md,
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 3, borderColor: '#fff',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4,
-  },
+  vehiclePhoto:     { width: 120, height: 110, resizeMode: 'cover' },
+  vehiclePhotoEmpty: { width: 120, height: 110, backgroundColor: `${COLORS.primary}10`, justifyContent: 'center', alignItems: 'center' },
+  vehicleInfo:   { flex: 1, padding: SPACING.md, justifyContent: 'center', gap: 4 },
+  vehicleName:   { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary },
+  vehiclePlate:  { fontSize: 13, fontWeight: '700', color: COLORS.primary, letterSpacing: 0.5 },
+  vehicleStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statusDot:     { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.success },
+  statusText:    { fontSize: 11, fontWeight: '700', color: COLORS.success, letterSpacing: 0.3 },
 
-  // ── Buttons ───────────────────────────────────────────────────────────────────
-  primaryBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 52,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 7,
+  docRow:  { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, gap: SPACING.md },
+  docIcon: { width: 40, height: 40, borderRadius: RADIUS.md, backgroundColor: `${COLORS.primary}10`, justifyContent: 'center', alignItems: 'center' },
+  docInfo: { flex: 1 },
+  docTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
+  docSub:   { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  updateDocBtn: {
+    marginTop: SPACING.sm, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.primary,
+    paddingVertical: 12, alignItems: 'center',
   },
-  primaryBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  secondaryBtn: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.md, height: 52,
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, gap: SPACING.md,
-    borderWidth: 1, borderColor: `${COLORS.primary}30`,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-  },
-  secondaryBtnText: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.primary },
+  updateDocText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
 
-  adminBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACING.md, paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    backgroundColor: `${COLORS.primary}12`,
-    borderWidth: 1, borderColor: `${COLORS.primary}30`,
-  },
-  adminBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
+  seeAll:  { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  routeRow: { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, gap: SPACING.md },
+  routeIcon: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: `${COLORS.primary}10`, justifyContent: 'center', alignItems: 'center' },
+  routeInfo: { flex: 1 },
+  routeName:  { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 3 },
+  routeMeta:  { fontSize: 12, color: COLORS.textSecondary },
+  routeRight: { alignItems: 'flex-end', gap: 4 },
+  routePrice: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
+  routeStatusPill: { backgroundColor: COLORS.borderLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full },
+  routeStatusDone: { backgroundColor: `${COLORS.success}15` },
+  routeStatusText: { fontSize: 9, fontWeight: '800', color: COLORS.textTertiary, letterSpacing: 0.3 },
+  routeStatusTextDone: { color: COLORS.success },
+  emptyRoutes: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.sm },
+  emptyRoutesText: { fontSize: 14, color: COLORS.textSecondary },
+})
 
-  logoutBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACING.sm, paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: `${COLORS.error}25`,
-    backgroundColor: `${COLORS.error}06`,
+// ── Drawer styles ─────────────────────────────────────────────────────────────
+const dr = StyleSheet.create({
+  panel: {
+    position: 'absolute', left: 0, top: 0, bottom: 0, width: DRAWER_W,
+    backgroundColor: COLORS.surface,
+    shadowColor: '#000', shadowOffset: { width: 6, height: 0 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 20,
   },
-  logoutText: { fontSize: 14, fontWeight: '600', color: COLORS.error },
+  header: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.xl, paddingBottom: SPACING.xl, gap: 5 },
+  avatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' },
+  avatarPlaceholder: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  avatarInitial: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  name:  { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: -0.3, marginTop: 8 },
+  email: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+  rolePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full, marginTop: 4,
+  },
+  rolePillText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+
+  sectionLabel: {
+    fontSize: 10, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 1.2,
+    paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: 4,
+  },
+  item: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
+    paddingVertical: 13, paddingHorizontal: SPACING.lg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+  },
+  itemLabel: { flex: 1, fontSize: 15, color: COLORS.textPrimary, fontWeight: '500' },
+
+  sep: { height: 8, backgroundColor: COLORS.surfaceAlt },
+  logoutRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: 15, paddingHorizontal: SPACING.lg },
+  logoutText: { fontSize: 15, fontWeight: '600', color: COLORS.error },
 })

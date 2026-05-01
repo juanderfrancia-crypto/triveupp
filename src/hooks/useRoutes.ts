@@ -25,6 +25,7 @@ export interface Route {
   driver_name?: string;
   driver_rating?: number;
   driver_trips?: number;
+  driver_avatar_url?: string;
 }
 
 const isMissingColumnError = (err: any, column: string) => {
@@ -47,7 +48,7 @@ export const useRoutes = () => {
     const driverIds = Array.from(new Set(rawRoutes.map((route) => route.driver_id)));
     try {
       const [{ data: profiles }, { data: drivers }] = await Promise.all([
-        supabase.from('profiles').select('id, name, rating').in('id', driverIds),
+        supabase.from('profiles').select('id, name, rating, avatar_url').in('id', driverIds),
         supabase.from('drivers').select('id, average_rating').in('id', driverIds),
       ]);
 
@@ -66,6 +67,7 @@ export const useRoutes = () => {
           driver_name: route.driver_name ?? profile?.name,
           driver_rating:
             route.driver_rating ?? profile?.rating ?? driver?.average_rating ?? 0,
+          driver_avatar_url: profile?.avatar_url ?? undefined,
         } as Route;
       });
     } catch (err) {

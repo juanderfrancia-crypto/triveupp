@@ -144,7 +144,7 @@ export default function HomeScreen() {
       onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}
     >
       <LinearGradient
-        colors={[COLORS.primaryDark, COLORS.primary]}
+        colors={[COLORS.primaryDark, '#0a2a6e']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.routeCardInner}
@@ -451,7 +451,7 @@ export default function HomeScreen() {
               activeOpacity={0.88}
             >
               <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
+                colors={[COLORS.primaryDark, '#0a2a6e']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.ctaGradient}

@@ -3,8 +3,9 @@ import { View, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import HomeScreen from '../screens/HomeScreen'
 import SearchScreen from '../screens/SearchScreen'
+import NotificationsScreen from '../screens/NotificationsScreen'
 import ProfileScreen from '../screens/ProfileScreen'
-import { COLORS, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { COLORS, SPACING, RADIUS } from '../theme/theme'
 
 const Tab = createBottomTabNavigator()
 
@@ -18,12 +19,13 @@ export default function TabNavigator() {
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline'
           } else if (route.name === 'Search') {
-            iconName = focused ? 'search' : 'search-outline'
+            iconName = focused ? 'car' : 'car-outline'
+          } else if (route.name === 'Alerts') {
+            iconName = focused ? 'notifications' : 'notifications-outline'
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline'
           }
 
-          // Active tab gets blue circle effect
           if (focused) {
             return (
               <View style={styles.tabActive}>
@@ -57,9 +59,10 @@ export default function TabNavigator() {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Inicio' }} />
-      <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'Buscar' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
+      <Tab.Screen name="Home"    component={HomeScreen}          options={{ title: 'Inicio' }} />
+      <Tab.Screen name="Search"  component={SearchScreen}        options={{ title: 'Viajes' }} />
+      <Tab.Screen name="Alerts"  component={NotificationsScreen} options={{ title: 'Alertas' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen}       options={{ title: 'Perfil' }} />
     </Tab.Navigator>
   )
 }
