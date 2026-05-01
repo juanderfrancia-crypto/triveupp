@@ -19,6 +19,7 @@ import { supabase } from '../services/supabase'
 import { checkDriverApprovalStatus, getDriverRestrictionMessage, type DriverApprovalStatus } from '../services/driverApproval'
 import { notifyRouteCancellation } from '../services/pushNotifications'
 import { useNotifications } from '../hooks/useNotifications'
+import { TripMessagesModal } from '../components/TripMessagesModal'
 
 interface Passenger {
   booking_id: string
@@ -61,6 +62,11 @@ export default function DriverPanelScreen() {
   const [approvalStatus, setApprovalStatus] = useState<DriverApprovalStatus | null>(null)
   const [checkingApproval, setCheckingApproval] = useState(true)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [selectedChat, setSelectedChat] = useState<{
+    tripId: string
+    otherUserId: string
+    otherUserName: string
+  } | null>(null)
 
   const fetchDriverRoutes = useCallback(async () => {
     if (!user?.id) return
@@ -561,9 +567,18 @@ export default function DriverPanelScreen() {
                                   Asiento {passenger.seat_number}
                                 </Text>
                               </View>
-                              <View style={styles.confirmedBadge}>
-                                <Ionicons name="checkmark" size={12} color={COLORS.success} />
-                              </View>
+                              <TouchableOpacity
+                                style={styles.chatBtn}
+                                onPress={() =>
+                                  setSelectedChat({
+                                    tripId: route.id,
+                                    otherUserId: passenger.passenger_id,
+                                    otherUserName: passenger.name,
+                                  })
+                                }
+                              >
+                                <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.primary} />
+                              </TouchableOpacity>
                             </View>
                           ))}
                         </View>
@@ -664,6 +679,17 @@ export default function DriverPanelScreen() {
           })
         )}
       </ScrollView>
+
+      {selectedChat && user?.id && (
+        <TripMessagesModal
+          visible={!!selectedChat}
+          tripId={selectedChat.tripId}
+          userId={user.id}
+          otherUserId={selectedChat.otherUserId}
+          otherUserName={selectedChat.otherUserName}
+          onClose={() => setSelectedChat(null)}
+        />
+      )}
     </View>
   )
 }
@@ -945,6 +971,14 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.success + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },

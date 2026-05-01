@@ -312,11 +312,7 @@ export default function TripStatusScreen() {
                     id: selectedRoute.id,
                     driverId: selectedRoute.driver_id,
                     driverName: selectedRoute.driver_name,
-                  }
-                    setToastConfig({ visible: true, message: 'No está disponible el chat con el conductor', type: 'error' })
-                    return
-                  }
-                  navigation.navigate('Chat' as never, { otherUserId: selectedRoute.driver_id } as never)
+                  })
                 }}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />

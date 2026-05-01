@@ -157,11 +157,27 @@ export const useTripMessages = (tripId?: string, userId?: string, otherUserId?: 
         return
       }
 
+      const tempId = `temp-${Date.now()}`
+      const tempMessage: TripMessage = {
+        id: tempId,
+        trip_id: tripId,
+        from_user_id: userId,
+        to_user_id: otherUserId,
+        message: message.trim(),
+        created_at: new Date().toISOString(),
+        is_read: false,
+      }
+
+      setMessages((prev) => [...prev, tempMessage])
+
       try {
         setError(null)
-        await sendTripMessage(tripId, userId, otherUserId, message)
-        // El realtime agrega el mensaje a la lista automáticamente
+        const sent = await sendTripMessage(tripId, userId, otherUserId, message)
+        // Reemplazar temp con el mensaje real del servidor
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? sent : m)))
       } catch (err: any) {
+        // Revertir optimistic update
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
         setError(err.message)
       }
     },
