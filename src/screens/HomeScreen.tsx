@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -6,1272 +6,793 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Pressable,
+  FlatList,
+  Image,
   ActivityIndicator,
   Animated,
   Easing,
+  Dimensions,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
+import { COLORS, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { usePassengerHomeStats } from '../hooks/usePassengerHomeStats'
 import { useDriverEarnings } from '../hooks/useDriverEarnings'
 import { useRoutes, Route } from '../hooks/useRoutes'
 import { useNotifications } from '../hooks/useNotifications'
-import {
-  calculateTripProgress,
-  getTripStatusMessage,
-  getCoordinatesFromLocationName,
-  getNearestLocation,
-} from '../utils/tripProgress'
+import { useUpcomingTrip, formatCountdown } from '../hooks/useUpcomingTrip'
+import { useRecentRoutes } from '../hooks/useRecentRoutes'
+
+const { width: SCREEN_W } = Dimensions.get('window')
+const CARD_W = SCREEN_W - SPACING.lg * 2
 
 const getGreeting = () => {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Buenos días'
-  if (hour < 18) return 'Buenas tardes'
+  const h = new Date().getHours()
+  if (h < 12) return 'Buenos días'
+  if (h < 18) return 'Buenas tardes'
   return 'Buenas noches'
 }
 
+const MEMBERSHIP_CFG: Record<string, { bg: string; text: string; icon: string; label: string }> = {
+  free:    { bg: 'rgba(107,114,128,0.12)', text: '#4B5563', icon: 'shield-outline',   label: 'Gratis'  },
+  basic:   { bg: 'rgba(59,130,246,0.12)',  text: '#1D4ED8', icon: 'shield-checkmark', label: 'Básico'  },
+  premium: { bg: 'rgba(168,85,247,0.12)',  text: '#6D28D9', icon: 'star',             label: 'Premium' },
+  vip:     { bg: 'rgba(217,70,39,0.12)',   text: '#92400E', icon: 'crown',            label: 'VIP'     },
+}
+
 export default function HomeScreen() {
-  const navigation = useNavigation<any>()
-  const [origin, setOrigin] = useState('')
+  const navigation   = useNavigation<any>()
+  const [origin, setOrigin]           = useState('')
   const [destination, setDestination] = useState('')
-  const [topRoutes, setTopRoutes] = useState<Route[]>([])
-  const [isFetchingTopRoutes, setIsFetchingTopRoutes] = useState(false)
-  
-  // Estado del progreso del viaje real
-  const [tripProgress, setTripProgress] = useState<number>(0)
-  const [locationStatus, setLocationStatus] = useState<string>('')
-  const [hasActiveTrip, setHasActiveTrip] = useState<boolean>(false)
-  
-  // Animación del carro
-  const carPositionAnim = useRef(new Animated.Value(0)).current
-  const realTripProgressAnim = useRef(new Animated.Value(0)).current
-  
-  // Animación de pulsación para botón "Viajes Ahora"
-  const shimmerAnim = useRef(new Animated.Value(0)).current
-  
-  const balance = useAppStore((state) => state.balance)
-  const user = useAppStore((state) => state.user)
-  const selectedRoute = useAppStore((state) => state.selectedRoute)
+  const [originFocused, setOriginFocused]           = useState(false)
+  const [destinationFocused, setDestinationFocused] = useState(false)
+  const [topRoutes, setTopRoutes]   = useState<Route[]>([])
+  const [fetchingRoutes, setFetchingRoutes] = useState(false)
+  const [activeDot, setActiveDot]   = useState(0)
+  const pulseAnim    = useRef(new Animated.Value(1)).current
+  const skeletonAnim = useRef(new Animated.Value(0.4)).current
+
+  const user       = useAppStore((s) => s.user)
+  const setSelectedRoute = useAppStore((s) => s.setSelectedRoute)
+  const notificationUnreadCount = useAppStore((s) => s.notificationUnreadCount)
   const { loading: routesLoading, error: routesError, fetchRoutes } = useRoutes()
   useNotifications(user?.id)
-  const notificationUnreadCount = useAppStore((state) => state.notificationUnreadCount)
-  const showRoutesLoading = (isFetchingTopRoutes || routesLoading) && topRoutes.length === 0
-  const showRoutesError = routesError && topRoutes.length === 0
+
   const isDriver = user?.role === 'driver'
 
-  const loadTopDrivers = useCallback(async () => {
-    setIsFetchingTopRoutes(true)
+  const { stats: passengerStats, loading: statsLoading }           = usePassengerHomeStats(isDriver ? undefined : user?.id)
+  const { earnings: driverEarnings, loading: earningsLoading }     = useDriverEarnings(isDriver ? user?.id : undefined)
+  const { trip: upcomingTrip, loading: tripLoading }               = useUpcomingTrip(isDriver ? undefined : user?.id)
+  const { routes: recentRoutes }                                    = useRecentRoutes(isDriver ? undefined : user?.id)
+
+  const showRoutesLoading = (fetchingRoutes || routesLoading) && topRoutes.length === 0
+  const showRoutesError   = routesError && topRoutes.length === 0
+
+  // ── Load top routes ────────────────────────────────────────────────────────
+  const loadTopRoutes = useCallback(async () => {
+    setFetchingRoutes(true)
     setTopRoutes([])
     try {
-      const routes = await fetchRoutes(undefined, undefined, 'all', 'driver_rating', false, 4)
+      const routes = await fetchRoutes(undefined, undefined, 'all', 'driver_rating', false, 6)
       setTopRoutes(routes)
-    } catch (err) {
-      console.warn('Error cargando rutas destacadas:', err)
-    } finally {
-      setIsFetchingTopRoutes(false)
+    } catch { /* silently ignore */ } finally {
+      setFetchingRoutes(false)
     }
   }, [fetchRoutes])
 
-  useFocusEffect(
-    useCallback(() => {
-      loadTopDrivers()
-    }, [loadTopDrivers])
-  )
+  useFocusEffect(useCallback(() => { loadTopRoutes() }, [loadTopRoutes]))
 
-  // Animación de pulsación para botón "Viajes Ahora"
+  // ── Pulse animation ────────────────────────────────────────────────────────
   useEffect(() => {
-    const startPulse = () => {
-      Animated.loop(
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        })
-      ).start()
-    }
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.025, duration: 950, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,     duration: 950, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start()
+    return () => pulseAnim.setValue(1)
+  }, [pulseAnim])
 
-    startPulse()
+  // ── Skeleton shimmer ───────────────────────────────────────────────────────
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonAnim, { toValue: 1,   duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(skeletonAnim, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start()
+    return () => skeletonAnim.setValue(0.4)
+  }, [skeletonAnim])
 
-    return () => {
-      shimmerAnim.setValue(0)
-    }
-  }, [shimmerAnim])
-
-
-  // Stats del pasajero para HomeScreen
-  const { stats: passengerHomeStats, loading: statsLoading, refetch: refetchHomeStats } = usePassengerHomeStats(user?.id)
-
-  // Stats del conductor para HomeScreen
-  const { earnings: driverEarnings, loading: driverEarningsLoading, refetch: refetchDriverEarnings } = useDriverEarnings(isDriver ? user?.id : undefined)
-
-  return (
-    <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      {/* Fondo blanco puro */}
-      <View style={styles.gradientBg}>
-        <View style={styles.backgroundGradient} />
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const membershipBadge = () => {
+    const type   = user?.membership_type ?? 'free'
+    const expiry = user?.membership_expiry ? new Date(user.membership_expiry) : null
+    const days   = expiry && expiry > new Date() ? Math.ceil((expiry.getTime() - Date.now()) / 86400000) : 0
+    const cfg    = MEMBERSHIP_CFG[type] ?? MEMBERSHIP_CFG.free
+    return (
+      <View style={[styles.pill, { backgroundColor: cfg.bg }]}>
+        <Ionicons name={cfg.icon as any} size={13} color={cfg.text} />
+        <Text style={[styles.pillText, { color: cfg.text }]}>
+          {cfg.label}{days > 0 ? ` · ${days}d` : ''}
+        </Text>
       </View>
+    )
+  }
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
+  const metricValue = isDriver
+    ? `$${(driverEarnings?.thisMonthEarnings ?? 0).toLocaleString('es-CO')}`
+    : `$${(passengerStats?.spentThisMonth ?? 0).toLocaleString('es-CO')}`
+  const metricLabel = isDriver ? 'Ganancias este mes' : 'Gastado este mes'
+  const metricLoading = isDriver ? earningsLoading : statsLoading
+
+  // ── Navigate to upcoming trip ──────────────────────────────────────────────
+  const goToTripStatus = () => {
+    if (!upcomingTrip) return
+    setSelectedRoute(upcomingTrip.routeObj)
+    navigation.navigate('TripStatus' as never)
+  }
+
+  // ── Route card (carousel item) ─────────────────────────────────────────────
+  const renderRouteCard = ({ item: route }: { item: Route }) => (
+    <TouchableOpacity
+      style={styles.routeCard}
+      activeOpacity={0.88}
+      onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}
+    >
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.routeCardInner}
       >
-        {/* Header - Empty Space */}
-        <View style={styles.header}>
-          <View style={styles.headerSpacer} />
+        {/* Route */}
+        <View style={styles.routeTop}>
+          <View style={styles.routeRouteWrap}>
+            <View style={styles.routeDot} />
+            <View style={styles.routeNames}>
+              <Text style={styles.routeOrigin} numberOfLines={1}>{route.origin}</Text>
+              <Text style={styles.routeDest}   numberOfLines={1}>→ {route.destination}</Text>
+            </View>
+          </View>
+          <View style={styles.seatPill}>
+            <Ionicons name="people-outline" size={12} color="#fff" />
+            <Text style={styles.seatPillText}>
+              {route.available_seats} {route.available_seats === 1 ? 'puesto' : 'puestos'}
+            </Text>
+          </View>
         </View>
 
-        {/* Balance / Earnings Card - REDISEÑADA */}
-        <View
-          style={[styles.balanceCard, { backgroundColor: '#E8F1FF' }]}
-        >
-          <View style={{ padding: SPACING.lg }}>
-            {/* Header Row: Greeting + Notification Button */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.greeting, { color: '#1a1a1a', ...TYPOGRAPHY.h2, fontWeight: '600' }]}>
-                  {getGreeting()}, <Text style={{ fontWeight: '800', color: COLORS.primary }}>
-                    {user?.name ? user.name.split(' ')[0] : 'Usuario'}
-                  </Text>
-                </Text>
-              </View>
-              
-              {/* Notification Button - Black Background */}
-              <TouchableOpacity
-                accessible
-                accessibilityLabel="Notificaciones"
-                accessibilityRole="button"
-                style={{
-                  backgroundColor: '#1a1a1a',
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginLeft: 8,
-                }}
-                onPress={() => navigation.navigate('Notifications' as never)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-                {notificationUnreadCount > 0 && (
-                  <View style={{
-                    position: 'absolute',
-                    top: -8,
-                    right: -8,
-                    backgroundColor: COLORS.error,
-                    borderRadius: 12,
-                    minWidth: 24,
-                    height: 24,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                    <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#fff' }}>
-                      {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+        {/* Meta */}
+        <View style={styles.routeMeta}>
+          <View style={styles.routeMetaItem}>
+            <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.routeMetaText}>
+              {new Date(route.departure_time).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
+            </Text>
+          </View>
+          <View style={styles.routeMetaItem}>
+            <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.routeMetaText}>
+              {new Date(route.departure_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+          <View style={styles.routeMetaItem}>
+            <Ionicons name="cash-outline" size={13} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.routeMetaText}>${route.price_per_seat.toLocaleString('es-CO')}</Text>
+          </View>
+        </View>
 
-            {/* Main Amount - PROTAGONIST */}
-            <View style={{ marginBottom: SPACING.md }}>
-              <Text style={{ 
-                ...TYPOGRAPHY.h1, 
-                color: COLORS.primary,
-                letterSpacing: -0.8
-              }}>
-                {isDriver
-                  ? (driverEarnings?.thisMonthEarnings ?? 0).toLocaleString('es-CO')
-                  : (passengerHomeStats?.spentThisMonth ?? 0).toLocaleString('es-CO')}
-              </Text>
-              <Text style={{ 
-                ...TYPOGRAPHY.bodySmall, 
-                color: '#1a1a1a' + '75',
-                marginTop: SPACING.xs
-              }}>
-                {isDriver ? 'Ganancias hoy' : 'Gastado este mes'}
+        <View style={styles.routeDivider} />
+
+        {/* Driver */}
+        <View style={styles.routeDriver}>
+          <View style={styles.driverAvatar}>
+            <Text style={styles.driverInitials}>
+              {route.driver_name
+                ? route.driver_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                : 'DR'}
+            </Text>
+          </View>
+          <View style={styles.driverInfo}>
+            <Text style={styles.driverName} numberOfLines={1}>{route.driver_name ?? 'Conductor'}</Text>
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={11} color="#FBBF24" />
+              <Text style={styles.ratingText}>{route.driver_rating?.toFixed(1) ?? '0.0'}</Text>
+            </View>
+          </View>
+          {route.vehicle_type && (
+            <View style={styles.vehicleTag}>
+              <Text style={styles.vehicleTagText}>
+                {route.vehicle_type.charAt(0).toUpperCase() + route.vehicle_type.slice(1)}
               </Text>
             </View>
+          )}
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  )
 
-            {/* Status Pills - Pasajero */}
-            {!isDriver && (
-              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
-                <View style={{
-                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="calendar" size={14} color={COLORS.primary} />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
-                    Próx: {passengerHomeStats?.nextTripTime ? passengerHomeStats.nextTripTime : '--:--'}
-                  </Text>
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} bounces>
+
+        {/* ══ HEADER ════════════════════════════════════════════════════════ */}
+        <View style={styles.header}>
+          <Text style={styles.wordmark}>trive</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications' as never)} accessibilityLabel="Notificaciones">
+              <Ionicons name="notifications-outline" size={22} color={COLORS.textPrimary} />
+              {notificationUnreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}</Text>
                 </View>
-                {/* Membership Badge */}
-                {(() => {
-                  const membershipType = user?.membership_type || 'free'
-                  const membershipExpiry = user?.membership_expiry ? new Date(user.membership_expiry) : null
-                  const today = new Date()
-                  const daysRemaining = membershipExpiry && membershipExpiry > today 
-                    ? Math.ceil((membershipExpiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-                    : 0
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation.navigate('Profile' as never)} accessibilityLabel="Ver perfil">
+              {user?.avatar_url ? (
+                <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitial}>{user?.name?.charAt(0).toUpperCase() ?? 'U'}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
 
-                  // Colores según tipo de membresía
-                  const membershipColors: Record<string, { bg: string; text: string; icon: string }> = {
-                    free: { bg: 'rgba(107, 114, 128, 0.1)', text: '#374151', icon: 'shield-outline' },
-                    basic: { bg: 'rgba(59, 130, 246, 0.1)', text: '#1E40AF', icon: 'shield-checkmark' },
-                    premium: { bg: 'rgba(168, 85, 247, 0.1)', text: '#6B21A8', icon: 'star' },
-                    vip: { bg: 'rgba(217, 70, 39, 0.1)', text: '#7C2D12', icon: 'crown' },
-                  }
+        {/* ══ HERO CARD ══════════════════════════════════════════════════════ */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <Text style={styles.heroGreeting}>
+              {getGreeting()},{' '}
+              <Text style={styles.heroName}>{user?.name?.split(' ')[0] ?? 'Usuario'}</Text>
+            </Text>
+            {metricLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
+          </View>
+          {metricLoading ? (
+            <>
+              <Animated.View style={[styles.skeletonAmount, { opacity: skeletonAnim }]} />
+              <Animated.View style={[styles.skeletonLabel,  { opacity: skeletonAnim }]} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.heroAmount}>{metricValue}</Text>
+              <Text style={styles.heroLabel}>{metricLabel}</Text>
+            </>
+          )}
 
-                  const colors = membershipColors[membershipType] || membershipColors.free
-                  const displayText = membershipType === 'free' 
-                    ? 'Gratis'
-                    : membershipType === 'basic'
-                    ? 'Básico'
-                    : membershipType === 'premium'
-                    ? 'Premium'
-                    : 'VIP'
-
-                  const displaySubtext = daysRemaining > 0 
-                    ? `${daysRemaining} días`
-                    : membershipExpiry
-                    ? 'Expirado'
-                    : ''
-
-                  return (
-                    <View style={{
-                      backgroundColor: colors.bg,
-                      paddingHorizontal: SPACING.sm,
-                      paddingVertical: SPACING.xs,
-                      borderRadius: RADIUS.md,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: SPACING.xs
-                    }}>
-                      <Ionicons name={colors.icon as any} size={14} color={colors.text} />
-                      <View>
-                        <Text style={{ ...TYPOGRAPHY.labelSmall, color: colors.text }}>
-                          {displayText}
-                        </Text>
-                        {displaySubtext && (
-                          <Text style={{ ...TYPOGRAPHY.labelSmall, color: colors.text, opacity: 0.7 }}>
-                            {displaySubtext}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  )
-                })()}
+          <View style={styles.pillRow}>
+            {!isDriver && (
+              <View style={styles.pill}>
+                <Ionicons name="calendar-outline" size={13} color={COLORS.primary} />
+                <Text style={styles.pillText}>Próx: {passengerStats?.nextTripTime ?? '--:--'}</Text>
               </View>
             )}
-
-            {/* Status Pills - Conductor */}
+            {!isDriver && membershipBadge()}
             {isDriver && (
-              <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
-                <View style={{
-                  backgroundColor: 'rgba(21, 74, 168, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="car" size={14} color={COLORS.primary} />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: COLORS.primary }}>
-                    {driverEarnings?.completedTrips ?? 0} viajes
-                  </Text>
+              <>
+                <View style={styles.pill}>
+                  <Ionicons name="car-outline" size={13} color={COLORS.primary} />
+                  <Text style={styles.pillText}>{driverEarnings?.completedTrips ?? 0} viajes</Text>
                 </View>
-
-                <View style={{
-                  backgroundColor: 'rgba(250, 204, 21, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="star" size={14} color="#FACC15" />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#92400E' }}>
-                    {user?.rating ?? '--'}
-                  </Text>
+                <View style={[styles.pill, { backgroundColor: 'rgba(250,204,21,0.12)' }]}>
+                  <Ionicons name="star" size={13} color="#D97706" />
+                  <Text style={[styles.pillText, { color: '#92400E' }]}>{user?.rating ?? '--'}</Text>
                 </View>
-
-                <View style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  paddingHorizontal: SPACING.sm,
-                  paddingVertical: SPACING.xs,
-                  borderRadius: RADIUS.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: SPACING.xs
-                }}>
-                  <Ionicons name="radio" size={14} color="#10B981" />
-                  <Text style={{ ...TYPOGRAPHY.labelSmall, color: '#047857' }}>
-                    En línea
-                  </Text>
+                <View style={[styles.pill, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
+                  <Ionicons name="radio" size={13} color="#059669" />
+                  <Text style={[styles.pillText, { color: '#065F46' }]}>En línea</Text>
                 </View>
-              </View>
+              </>
             )}
           </View>
         </View>
-        {/* Search Section */}
-        <View style={styles.searchSection}>
+
+        {/* ══ PRÓXIMO VIAJE (solo pasajeros) ════════════════════════════════ */}
+        {!isDriver && (
+          tripLoading ? null : upcomingTrip ? (
+            <TouchableOpacity style={styles.upcomingCard} onPress={goToTripStatus} activeOpacity={0.92}>
+              {/* Header strip */}
+              <View style={styles.upcomingHeader}>
+                <View style={styles.upcomingHeaderLeft}>
+                  <View style={styles.upcomingDot} />
+                  <Text style={styles.upcomingTitle}>Tu próximo viaje</Text>
+                </View>
+                <View style={styles.countdownBadge}>
+                  <Ionicons name="time-outline" size={12} color={COLORS.success} />
+                  <Text style={styles.countdownText}>Sale en {formatCountdown(upcomingTrip.minutesUntil)}</Text>
+                </View>
+              </View>
+
+              {/* Route visualization */}
+              <View style={styles.upcomingRoute}>
+                <View style={styles.upcomingRoutePoints}>
+                  <View style={styles.routePointBlue} />
+                  <View style={styles.routePointLine} />
+                  <View style={styles.routePointRed} />
+                </View>
+                <View style={styles.upcomingRouteLabels}>
+                  <Text style={styles.upcomingCity} numberOfLines={1}>{upcomingTrip.origin}</Text>
+                  <Text style={styles.upcomingCity} numberOfLines={1}>{upcomingTrip.destination}</Text>
+                </View>
+              </View>
+
+              {/* Footer */}
+              <View style={styles.upcomingFooter}>
+                <View style={styles.upcomingDriver}>
+                  <View style={styles.upcomingAvatar}>
+                    <Text style={styles.upcomingAvatarText}>{upcomingTrip.driverName.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.upcomingDriverName}>{upcomingTrip.driverName}</Text>
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={11} color="#FBBF24" />
+                      <Text style={[styles.ratingText, { color: COLORS.textSecondary }]}>{upcomingTrip.driverRating.toFixed(1)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.seatBadge}>
+                  <Ionicons name="person-outline" size={13} color={COLORS.primary} />
+                  <Text style={styles.seatBadgeText}>Asiento {upcomingTrip.seatNumber}</Text>
+                </View>
+              </View>
+
+              <View style={styles.upcomingCta}>
+                <Text style={styles.upcomingCtaText}>Ver detalles del viaje</Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+              </View>
+            </TouchableOpacity>
+          ) : null
+        )}
+
+        {/* ══ BUSCAR VIAJE ══════════════════════════════════════════════════ */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Buscar viaje</Text>
 
           <View style={styles.searchCard}>
             <View style={styles.searchRow}>
-              <View style={styles.searchPoints}>
-                <View style={styles.pointDotBlue} />
-                <View style={styles.pointLine} />
+              <View style={styles.dotCol}>
+                <View style={styles.dotBlue} />
+                <View style={styles.dotLine} />
               </View>
-              <View style={styles.searchInputContainer}>
-                <Text style={styles.searchLabel}>Desde</Text>
+              <View style={styles.searchField}>
+                <Text style={styles.searchLabel}>DESDE</Text>
                 <TextInput
-                  accessible
-                  accessibilityLabel="Ubicación de origen"
-                  style={styles.searchInput}
+                  style={[styles.searchInput, originFocused && styles.searchInputFocused]}
                   placeholder="Ej: Armenia, Cali..."
                   placeholderTextColor={COLORS.textTertiary}
                   value={origin}
                   onChangeText={setOrigin}
+                  onFocus={() => setOriginFocused(true)}
+                  onBlur={() => setOriginFocused(false)}
+                  accessibilityLabel="Origen"
                 />
               </View>
             </View>
 
-            <View style={styles.searchRowTo}>
-              <View style={styles.searchPointsTo}>
-                <View style={styles.pointDotOrange} />
+            <View style={styles.searchDividerRow}>
+              <View style={styles.searchDivider} />
+              <TouchableOpacity
+                style={styles.swapBtn}
+                onPress={() => { setOrigin(destination); setDestination(origin) }}
+                accessibilityLabel="Intercambiar origen y destino"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="swap-vertical" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchRow}>
+              <View style={styles.dotCol}>
+                <View style={styles.dotRed} />
               </View>
-              <View style={styles.searchInputContainer}>
-                <Text style={styles.searchLabel}>Hacia</Text>
+              <View style={styles.searchField}>
+                <Text style={styles.searchLabel}>HACIA</Text>
                 <TextInput
-                  accessible
-                  accessibilityLabel="Ubicación de destino"
-                  style={styles.searchInput}
+                  style={[styles.searchInput, destinationFocused && styles.searchInputFocused]}
                   placeholder="Ej: Cali, Puerto Tejada..."
                   placeholderTextColor={COLORS.textTertiary}
                   value={destination}
                   onChangeText={setDestination}
+                  onFocus={() => setDestinationFocused(true)}
+                  onBlur={() => setDestinationFocused(false)}
+                  accessibilityLabel="Destino"
                 />
               </View>
             </View>
           </View>
 
+          {/* Rutas recientes */}
+          {!isDriver && recentRoutes.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recentScroll} contentContainerStyle={styles.recentContent}>
+              {recentRoutes.map((r, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.recentChip}
+                  onPress={() => { setOrigin(r.origin); setDestination(r.destination) }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="time-outline" size={13} color={COLORS.textSecondary} />
+                  <Text style={styles.recentChipText} numberOfLines={1}>{r.origin} → {r.destination}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
           <TouchableOpacity
-            accessible
-            accessibilityLabel="Buscar rutas disponibles"
-            accessibilityRole="button"
-            style={[styles.searchBtn, (!destination || !origin) && styles.searchBtnDisabled] as any}
-            disabled={!destination || !origin}
+            style={[styles.searchBtn, (!origin || !destination) && styles.searchBtnDisabled]}
+            disabled={!origin || !destination}
             onPress={() =>
-              navigation.navigate(
-                'Main' as never,
-                { screen: 'Search', params: { origin: origin.trim(), destination: destination.trim() } } as never,
-              )
+              navigation.navigate('Main' as never, {
+                screen: 'Search',
+                params: { origin: origin.trim(), destination: destination.trim() },
+              } as never)
             }
+            accessibilityLabel="Buscar rutas"
             activeOpacity={0.85}
           >
-            <Ionicons name="search" size={20} color={destination && origin ? COLORS.textInverse : COLORS.textSecondary} />
-            <Text style={[styles.searchBtnText, (!destination || !origin) && styles.searchBtnTextDisabled]}>
+            <Ionicons name="search" size={18} color={origin && destination ? '#fff' : COLORS.textTertiary} />
+            <Text style={[styles.searchBtnText, (!origin || !destination) && styles.searchBtnTextDisabled]}>
               Buscar rutas
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Available Rides NOW Button */}
-        <TouchableOpacity
-          accessible
-          accessibilityLabel="Ver viajes disponibles ahora"
-          accessibilityRole="button"
-          style={styles.availableRidesButton}
-          onPress={() => navigation.navigate('AvailableRides' as never)}
-          activeOpacity={0.8}
-        >
-          <Animated.View
-            style={{
-              transform: [
-                {
-                  scale: shimmerAnim.interpolate({
-                    inputRange: [0, 0.5, 1],
-                    outputRange: [1, 1.05, 1],
-                  }),
-                },
-              ],
-            }}
-          >
-            <LinearGradient
-              colors={['#10A37F', '#0E8B6E']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.availableRidesGradient}
+        {/* ══ VIAJES AHORA CTA ══════════════════════════════════════════════ */}
+        <View style={styles.section}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <TouchableOpacity
+              style={styles.ctaWrapper}
+              onPress={() => navigation.navigate('AvailableRides' as never)}
+              accessibilityLabel="Viajes disponibles ahora"
+              activeOpacity={0.88}
             >
-              <View style={styles.availableRidesContent}>
-                <View style={styles.availableRidesText}>
-                  <Text style={styles.availableRidesLabel}>Viajes Ahora</Text>
-                  <Text style={styles.availableRidesSubtitle}>Ver disponibles en tiempo real</Text>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.ctaGradient}
+              >
+                <View style={styles.ctaIconWrap}>
+                  <Ionicons name="flash" size={20} color={COLORS.primary} />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-              </View>
-            </LinearGradient>
+                <View style={styles.ctaTextWrap}>
+                  <Text style={styles.ctaTitle}>Viajes Ahora</Text>
+                  <Text style={styles.ctaSubtitle}>Disponibles en tiempo real</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.65)" />
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
-        </TouchableOpacity>
+        </View>
 
-        {/* Routes Section */}
-        <View style={styles.routesSection}>
+        {/* ══ RUTAS DESTACADAS (carrusel) ════════════════════════════════════ */}
+        <View style={styles.sectionNoBottom}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Rutas destacadas</Text>
-            <TouchableOpacity
-              accessible
-              accessibilityLabel="Ver todas las rutas destacadas"
-              accessibilityRole="button"
-              onPress={() =>
-                navigation.navigate(
-                  'Main' as never,
-                  { screen: 'Search' } as never,
-                )
-              }
-              activeOpacity={0.8}
-            >
-              <Text style={styles.seeAllText}>Ver todas</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)} activeOpacity={0.7}>
+              <Text style={styles.seeAll}>Ver todas</Text>
             </TouchableOpacity>
           </View>
-
-          {showRoutesLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.loadingText}>Cargando mejores rutas...</Text>
-            </View>
-          ) : showRoutesError ? (
-            <View style={styles.emptySection}>
-              <Text style={styles.emptySectionTitle}>No se pudieron cargar las rutas</Text>
-              <Text style={styles.emptySectionText}>{routesError}</Text>
-            </View>
-          ) : topRoutes.length > 0 ? (
-            topRoutes.map((route: Route) => (
-              <TouchableOpacity
-                key={route.id}
-                style={styles.homeRouteCardWrapper}
-                activeOpacity={0.88}
-                onPress={() =>
-                  navigation.navigate(
-                    'Main' as never,
-                    { screen: 'Search' } as never,
-                  )
-                }
-              >
-                <LinearGradient
-                  colors={[COLORS.primaryDark, COLORS.primary, COLORS.primaryDark]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1.2, y: 1.2 }}
-                  style={styles.homeRouteCardGradient}
-                >
-                  <View style={styles.homeRouteTop}>
-                    <View style={styles.homeRouteRouteContainer}>
-                      <View style={styles.homeRouteDotOrigin} />
-                      <View style={styles.homeRouteTextContainer}>
-                        <Text style={styles.homeRouteText} numberOfLines={1}>
-                          {route.origin}
-                        </Text>
-                        <Text style={styles.homeRouteTextSecondary} numberOfLines={1}>
-                          → {route.destination}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.homeSeatsAvailable}>
-                      <Text style={styles.homeSeatsText}>{route.available_seats} puesto{route.available_seats === 1 ? '' : 's'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.homeRouteMiddle}>
-                    <View style={styles.homeRouteDetailItem}>
-                      <Ionicons name="calendar-outline" size={14} color={COLORS.textInverse} />
-                      <Text style={styles.homeRouteDetailText}>
-                        {new Date(route.departure_time).toLocaleDateString('es-CO', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                      </Text>
-                    </View>
-                    <View style={styles.homeRouteDetailItem}>
-                      <Ionicons name="cash-outline" size={14} color={COLORS.textInverse} />
-                      <Text style={styles.homeRouteDetailText}>
-                        ${route.price_per_seat.toLocaleString('es-CO')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.homeRouteDivider} />
-
-                  <View style={styles.homeRouteBottom}>
-                    <View style={styles.homeRouteDriver}>
-                      <View style={styles.homeDriverAvatar}>
-                        <Text style={styles.homeDriverInitials}>
-                          {route.driver_name
-                            ? route.driver_name
-                                .split(' ')
-                                .map((name) => name[0])
-                                .join('')
-                                .slice(0, 2)
-                                .toUpperCase()
-                            : 'DR'}
-                        </Text>
-                      </View>
-                      <View style={styles.homeDriverDetails}>
-                        <Text style={styles.homeDriverName} numberOfLines={1}>
-                          {route.driver_name || 'Conductor mejor calificado'}
-                        </Text>
-                        <View style={styles.homeRatingBadge}>
-                          <Ionicons name="star" size={12} color={COLORS.accent} />
-                          <Text style={styles.homeRatingText}>{route.driver_rating?.toFixed(1) ?? '0.0'}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.homeSeatsAvailable}>
-                      <Text style={styles.homeSeatsText}>
-                        {route.vehicle_type ? route.vehicle_type.charAt(0).toUpperCase() + route.vehicle_type.slice(1) : 'Transporte'}
-                      </Text>
-                    </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptySection}>
-              <Text style={styles.emptySectionTitle}>No hay rutas disponibles</Text>
-              <Text style={styles.emptySectionText}>
-                Cambia el tipo de transporte o espera que nuevos viajes se publiquen.
-              </Text>
-            </View>
-          )}
-
         </View>
+
+        {showRoutesLoading ? (
+          <View style={[styles.section, styles.loadingBox]}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Cargando rutas...</Text>
+          </View>
+        ) : showRoutesError ? (
+          <View style={[styles.section, styles.emptyBox]}>
+            <Ionicons name="alert-circle-outline" size={32} color={COLORS.textTertiary} />
+            <Text style={styles.emptyTitle}>No se pudieron cargar las rutas</Text>
+          </View>
+        ) : topRoutes.length > 0 ? (
+          <>
+            {/* Break out of section padding for full-bleed carousel */}
+            <View style={styles.carouselWrapper}>
+              <FlatList
+                data={topRoutes}
+                keyExtractor={(item) => item.id}
+                renderItem={renderRouteCard}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_W + SPACING.md}
+                decelerationRate="fast"
+                contentContainerStyle={styles.carouselContent}
+                ItemSeparatorComponent={() => <View style={{ width: SPACING.md }} />}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / (CARD_W + SPACING.md))
+                  setActiveDot(Math.min(idx, topRoutes.length - 1))
+                }}
+              />
+            </View>
+
+            {/* Dot indicators */}
+            {topRoutes.length > 1 && (
+              <View style={styles.dotsRow}>
+                {topRoutes.map((_, i) => (
+                  <View key={i} style={[styles.dot, i === activeDot && styles.dotActive]} />
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={[styles.section, styles.emptyBox]}>
+            <Ionicons name="map-outline" size={32} color={COLORS.textTertiary} />
+            <Text style={styles.emptyTitle}>No hay rutas destacadas</Text>
+            <Text style={styles.emptySubtitle}>Revisa más tarde o busca manualmente</Text>
+          </View>
+        )}
+
       </ScrollView>
     </SafeAreaView>
-  );
+  )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  safe: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 32 },
 
-  // Fondo con círculos decorativos 3D
-  gradientBg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-  },
-
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-
-  // Header
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
-  headerSpacer: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-  },
-  logo: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: -0.5,
-  },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  wordmark: { fontSize: 26, fontWeight: '800', color: COLORS.primary, letterSpacing: -1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: RADIUS.md,
     backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderLight,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: COLORS.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  notificationCount: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#fff',
-  },
-
-  // Balance Card
-  // Balance Card
-  balanceCard: {
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#E8F1FF',
-    borderWidth: 0,
-    shadowColor: '#154AA8',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  balanceLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#1a1a1a' + '85',
-    marginBottom: 4,
-  },
-  balanceAmount: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    letterSpacing: -1,
-  },
-  balanceFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-    gap: 12,
-  },
-  balanceChip: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  balanceChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textInverse,
-    letterSpacing: 1,
-  },
-
-  // Search Section
-  searchSection: {
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  searchCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  searchRowTo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 10,
-  },
-  searchPoints: {
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  searchPointsTo: {
-    marginRight: 12,
-    marginTop: 6,
-  },
-  pointDotBlue: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.primary,
-  },
-  pointDotOrange: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#EF4444',
-  },
-  pointLine: {
-    width: 2,
-    height: 26,
-    backgroundColor: COLORS.borderLight,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  searchInputContainer: {
-    flex: 1,
-  },
-  searchLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  searchValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  searchValue: {
-    fontSize: 15,
-    color: COLORS.textPrimary,
-    flex: 1,
-  },
-  searchInput: {
-    fontSize: 15,
-    color: COLORS.textPrimary,
-    padding: 0,
-  },
-  searchBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    height: 50,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  searchBtnDisabled: {
-    backgroundColor: '#D1D5DB',
-  },
-  searchBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textInverse,
-  },
-  searchBtnTextDisabled: {
-    color: COLORS.textSecondary,
-  },
-
-  // Transport Section
-  transportSection: {
-    marginBottom: SPACING.xl,
-  },
-  transportRow: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
-    gap: 6,
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  transportItem: {
-    flex: 1,
-    minWidth: 56,
-    maxWidth: '18.5%',
-    backgroundColor: '#F0F4FA',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    shadowColor: 'rgba(21, 74, 168, 0.08)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
     elevation: 2,
   },
-  transportItemActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: 'transparent',
+  badge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: COLORS.error, borderRadius: RADIUS.full,
+    minWidth: 18, height: 18,
+    justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 4, borderWidth: 2, borderColor: COLORS.background,
+  },
+  badgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  avatarBtn: {
+    width: 40, height: 40, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 5,
   },
-  transportItemGradient: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    width: '100%',
-  },
-  transportIcon: {
-    marginBottom: 4,
-  },
-  transportIconInner: {
-    marginBottom: 4,
-  },
-  transportIconInactive: {
-    marginBottom: 4,
-  },
-  transportLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    textAlign: 'center',
-    lineHeight: 11,
-  },
-  transportLabelActive: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 11,
-  },
+  avatarInitial: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  avatarImage: { width: 40, height: 40, borderRadius: RADIUS.md },
 
-  // Quick Actions
-  quickActions: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-    gap: 10,
+  // ── Hero Card ────────────────────────────────────────────────────────────────
+  heroCard: {
+    marginHorizontal: SPACING.lg, marginTop: SPACING.sm, marginBottom: SPACING.lg,
+    backgroundColor: '#EEF4FF', borderRadius: RADIUS.lg, padding: SPACING.lg,
+    borderLeftWidth: 4, borderLeftColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 20,
+    elevation: 5,
   },
-  quickActionItem: {
-    flex: 1,
-    backgroundColor: '#E8F1FF',
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-    shadowColor: '#154AA8',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 10,
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
+  heroGreeting: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
+  heroName: { fontWeight: '700', color: COLORS.primary },
+  heroAmount: { fontSize: 36, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -1, marginBottom: 2 },
+  heroLabel: { fontSize: 13, color: COLORS.textSecondary, marginBottom: SPACING.md },
+  skeletonAmount: {
+    height: 40, width: 160, borderRadius: RADIUS.sm,
+    backgroundColor: `${COLORS.primary}20`, marginBottom: 6,
   },
-  quickActionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
+  skeletonLabel: {
+    height: 14, width: 110, borderRadius: RADIUS.xs,
+    backgroundColor: `${COLORS.primary}15`, marginBottom: SPACING.md,
   },
-  quickActionText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    textAlign: 'center',
+  pillRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(21,74,168,0.10)',
+    paddingHorizontal: SPACING.sm, paddingVertical: 5, borderRadius: RADIUS.full,
   },
+  pillText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
 
-  // Routes Section
-  routesSection: {
-    paddingHorizontal: SPACING.lg,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  seeAllText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  emptySection: {
-    padding: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  emptySectionTitle: {
-    ...TYPOGRAPHY.h4,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
-  },
-  emptySectionText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  loadingContainer: {
-    padding: SPACING.lg,
-    alignItems: 'center',
-  },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
-  },
-  // Route Card
-  routeCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+  // ── Upcoming Trip Card ───────────────────────────────────────────────────────
+  upcomingCard: {
+    marginHorizontal: SPACING.lg, marginBottom: SPACING.lg,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 4,
   },
-  routeTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  upcomingHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
   },
-  routeLeft: {
-    flex: 1,
-    marginRight: 12,
+  upcomingHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  upcomingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success },
+  upcomingTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
+  countdownBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: `${COLORS.success}15`,
+    paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.full,
   },
-  routeLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  countdownText: { fontSize: 12, fontWeight: '600', color: COLORS.success },
+  upcomingRoute: {
+    flexDirection: 'row', gap: SPACING.md, alignItems: 'center',
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
   },
-  routeDotGreen: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.success,
+  upcomingRoutePoints: { alignItems: 'center', gap: 0 },
+  routePointBlue: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
+  routePointLine: { width: 2, height: 24, backgroundColor: COLORS.borderLight, marginVertical: 3 },
+  routePointRed:  { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
+  upcomingRouteLabels: { flex: 1, gap: 22 },
+  upcomingCity: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  upcomingFooter: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md,
   },
-  routeOrigin: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    flex: 1,
+  upcomingDriver: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  upcomingAvatar: {
+    width: 34, height: 34, borderRadius: RADIUS.sm,
+    backgroundColor: `${COLORS.primary}18`, justifyContent: 'center', alignItems: 'center',
   },
-  routeTime: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    marginLeft: 14,
+  upcomingAvatarText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  upcomingDriverName: { fontSize: 13, fontWeight: '600', color: COLORS.textPrimary },
+  seatBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: `${COLORS.primary}12`,
+    paddingHorizontal: SPACING.sm, paddingVertical: 5, borderRadius: RADIUS.full,
   },
-  routeRight: {
-    alignItems: 'flex-end',
+  seatBadgeText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  upcomingCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: `${COLORS.primary}08`,
+    paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.borderLight,
   },
-  routePrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  routePricePer: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
-  routeDivider: {
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-    marginVertical: 12,
-  },
-  routeBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  routeMeta: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  routeMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  routeMetaText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  routeDriver: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  driverAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.primary + '50',
-  },
-  driverInitials: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textInverse,
-  },
-  driverInfo: {
-    marginRight: 2,
-  },
-  driverName: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textPrimary,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginTop: 2,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.accent,
-  },
-  seatsBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: COLORS.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  seatsText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
+  upcomingCtaText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
 
-  // Home Route Cards - Gradient Style
-  homeRouteCardWrapper: {
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    backgroundColor: COLORS.primaryDark,
-    borderTopWidth: 1,
-    borderTopColor: '#FFFFFF' + '15',
+  // ── Section ──────────────────────────────────────────────────────────────────
+  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
+  sectionNoBottom: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.md },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: -0.2 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  seeAll: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
+
+  // ── Search ───────────────────────────────────────────────────────────────────
+  searchCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border,
+    marginBottom: SPACING.sm, overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  homeRouteCardGradient: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-  },
-  homeRouteTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  homeRouteRouteContainer: {
-    flex: 1,
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md },
+  dotCol: { alignItems: 'center', width: 20, marginRight: SPACING.md },
+  dotBlue: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
+  dotLine: { width: 2, minHeight: 18, backgroundColor: COLORS.borderLight, marginTop: 3 },
+  dotRed:  { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
+  searchField: { flex: 1 },
+  searchLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 0.8, marginBottom: 3 },
+  searchInput: { fontSize: 15, color: COLORS.textPrimary, padding: 0 },
+  searchInputFocused: { color: COLORS.primary },
+  searchDividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    minWidth: 0,
+    marginLeft: 52,
+    marginRight: SPACING.md,
   },
-  homeRouteTextContainer: {
-    flex: 1,
-    minWidth: 0,
-  },
-  homeRouteDotOrigin: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    marginTop: 3,
-  },
-  homeRouteText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textInverse,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  homeRouteTextSecondary: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textInverse + 'DD',
-    marginTop: 2,
-    flexShrink: 1,
-  },
-  homeRoutePriceBox: {
-    marginLeft: SPACING.md,
-  },
-  homeRoutePrice: {
-    ...TYPOGRAPHY.h4,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  homeRouteMiddle: {
-    flexDirection: 'row',
-    gap: SPACING.lg,
-    marginBottom: SPACING.sm,
-  },
-  homeRouteDetailItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  homeRouteDetailText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
-    fontWeight: '600',
-  },
-  homeRouteDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    marginVertical: SPACING.sm,
-  },
-  homeRouteBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  homeRouteDriver: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  homeDriverAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  homeDriverInitials: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
-    fontWeight: '700',
-  },
-  homeDriverDetails: {
-    flex: 1,
-  },
-  homeDriverName: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
-    fontWeight: '600',
-  },
-  homeRatingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginTop: SPACING.xs,
-  },
-  homeRatingText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
-    fontWeight: '600',
-    fontSize: 10,
-  },
-  homeSeatsAvailable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.md,
-  },
-  homeSeatsText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textInverse,
-    fontWeight: '600',
-    fontSize: 12,
+  searchDivider: { flex: 1, height: 1, backgroundColor: COLORS.borderLight },
+  swapBtn: {
+    width: 28, height: 28, borderRadius: RADIUS.full,
+    backgroundColor: `${COLORS.primary}10`,
+    justifyContent: 'center', alignItems: 'center',
+    marginLeft: SPACING.sm,
+    borderWidth: 1, borderColor: `${COLORS.primary}20`,
   },
 
-  // Available Rides Button
-  availableRidesButton: {
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    shadowColor: '#10A37F',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
+  // Recent route chips
+  recentScroll: { marginBottom: SPACING.sm },
+  recentContent: { gap: SPACING.sm, paddingVertical: 2 },
+  recentChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md, paddingVertical: 7, borderRadius: RADIUS.full,
+    maxWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  availableRidesGradient: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.lg,
+  recentChipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+
+  searchBtn: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 50,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.sm,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 8,
   },
-  availableRidesContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
+  searchBtnDisabled: { backgroundColor: COLORS.borderLight, shadowOpacity: 0, elevation: 0 },
+  searchBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  searchBtnTextDisabled: { color: COLORS.textTertiary },
+
+  // ── CTA ──────────────────────────────────────────────────────────────────────
+  ctaWrapper: {
+    borderRadius: RADIUS.md, overflow: 'hidden',
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 18, elevation: 12,
   },
-  availableRidesIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    justifyContent: 'center',
-    alignItems: 'center',
+  ctaGradient: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.md },
+  ctaIconWrap: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  ctaTextWrap: { flex: 1 },
+  ctaTitle:    { fontSize: 15, fontWeight: '700', color: '#fff' },
+  ctaSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+
+  // ── Carousel ──────────────────────────────────────────────────────────────────
+  carouselWrapper: { marginBottom: SPACING.md },
+  carouselContent: { paddingHorizontal: SPACING.lg },
+  routeCard: {
+    width: CARD_W, borderRadius: RADIUS.md, overflow: 'hidden',
+    shadowColor: '#0D3A88', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.32, shadowRadius: 22, elevation: 14,
   },
-  availableRidesText: {
-    flex: 1,
+  routeCardInner: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.lg },
+  routeTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm },
+  routeRouteWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm, marginRight: SPACING.sm },
+  routeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', marginTop: 5 },
+  routeNames: { flex: 1 },
+  routeOrigin: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  routeDest:   { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  seatPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.full,
   },
-  availableRidesLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  availableRidesSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
+  seatPillText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+  routeMeta: { flexDirection: 'row', gap: SPACING.lg, marginBottom: SPACING.sm },
+  routeMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  routeMetaText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.85)' },
+  routeDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: SPACING.sm },
+  routeDriver: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  driverAvatar: { width: 34, height: 34, borderRadius: RADIUS.sm, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  driverInitials: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  driverInfo: { flex: 1 },
+  driverName: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  ratingRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  ratingText: { fontSize: 11, fontWeight: '600', color: '#FBBF24' },
+  vehicleTag: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full },
+  vehicleTagText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+
+  // Dots
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: SPACING.md },
+  dot:     { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.borderLight },
+  dotActive: { width: 18, backgroundColor: COLORS.primary },
+
+  // ── Loading / Empty ───────────────────────────────────────────────────────────
+  loadingBox: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderLight },
+  loadingText: { fontSize: 14, color: COLORS.textSecondary },
+  emptyBox: { alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderLight, gap: SPACING.sm },
+  emptyTitle:    { fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center' },
+  emptySubtitle: { fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' },
 })

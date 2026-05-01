@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Image } from 'react-native'
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  Image,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { LinearGradient } from 'expo-linear-gradient'
 import * as ImagePicker from 'expo-image-picker'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
@@ -18,96 +28,63 @@ export default function ProfileScreen() {
   const { logout: logoutAuth } = useAuth()
   const { profile, loading, switchRole, fetchProfile } = useProfile(user?.id)
   const { stats: passengerStats, loading: statsLoading, refetch: refetchStats } = usePassengerStats(user?.id)
-  const [isDriver, setIsDriver] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const [isDriver, setIsDriver]                     = useState(false)
+  const [isLoading, setIsLoading]                   = useState(false)
+  const [uploadingPhoto, setUploadingPhoto]         = useState(false)
   const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false)
-  const [vehiclePhotoError, setVehiclePhotoError] = useState(false)
-  const [shouldLogout, setShouldLogout] = useState(false)
-  const [toastVisible, setToastVisible] = useState(false)
-  const [toastMessage, setToastMessage] = useState('')
-  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success')
+  const [vehiclePhotoError, setVehiclePhotoError]   = useState(false)
+  const [shouldLogout, setShouldLogout]             = useState(false)
+  const [toastVisible, setToastVisible]             = useState(false)
+  const [toastMessage, setToastMessage]             = useState('')
+  const [toastType, setToastType]                   = useState<'success' | 'error' | 'info'>('success')
 
   useEffect(() => {
-    if (profile?.role) {
-      setIsDriver(profile.role === 'driver')
-    }
+    if (profile?.role) setIsDriver(profile.role === 'driver')
   }, [profile?.role])
 
-  // Recargar stats del pasajero cuando la pantalla recibe el enfoque
   useFocusEffect(
     useCallback(() => {
-      if (!isDriver) {
-        refetchStats()
-      }
+      if (!isDriver) refetchStats()
     }, [isDriver, refetchStats])
   )
 
-  // Ejecutar logout cuando shouldLogout sea true
   useEffect(() => {
-    if (shouldLogout) {
-      performLogout()
-      setShouldLogout(false)
-    }
+    if (shouldLogout) { performLogout(); setShouldLogout(false) }
   }, [shouldLogout])
 
-  const handleRoleSwitch = async (newRole: 'driver' | 'passenger') => {
-    if (!user?.id) {
-      Alert.alert('Error', 'No se pudo identificar tu cuenta')
-      return
-    }
-    
-    // Prevenir cambios múltiples simultáneos
-    if (isLoading) return
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(message); setToastType(type); setToastVisible(true)
+  }
 
-    // If switching to driver, show onboarding first
+  // ── Role switch ────────────────────────────────────────────────────────────
+  const handleRoleSwitch = async (newRole: 'driver' | 'passenger') => {
+    if (!user?.id || isLoading) return
     if (newRole === 'driver' && !isDriver) {
-      navigation.navigate('DriverOnboarding' as never)
-      return
+      navigation.navigate('DriverOnboarding' as never); return
     }
-    
     try {
       setIsLoading(true)
       const result = await switchRole(user.id, newRole)
       if (result) {
-        // Actualizar estado local inmediatamente
         setIsDriver(result.role === 'driver')
-        
-        // Show success message
-        setToastMessage(`Ahora eres ${newRole === 'driver' ? 'conductor' : 'pasajero'}`)
-        setToastType('success')
-        setToastVisible(true)
+        showToast(`Ahora eres ${newRole === 'driver' ? 'conductor' : 'pasajero'}`)
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'No se pudo cambiar el rol. Intenta de nuevo.')
-      console.error('Error switching role:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = () => {
-    console.log('handleLogout called')
     Alert.alert(
       'Cerrar Sesión',
       '¿Estás seguro de cerrar sesión?',
       [
-        { 
-          text: 'Cancelar', 
-          onPress: () => {
-            console.log('Logout cancelled')
-            setShouldLogout(false)
-          },
-          style: 'cancel' 
-        },
-        {
-          text: 'Cerrar',
-          onPress: () => {
-            console.log('Cerrar pressed - setting shouldLogout to true')
-            setShouldLogout(true)
-          },
-          style: 'destructive',
-        },
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar', style: 'destructive', onPress: () => setShouldLogout(true) },
       ],
       { cancelable: false }
     )
@@ -115,54 +92,29 @@ export default function ProfileScreen() {
 
   const performLogout = async () => {
     try {
-      setToastMessage('Cerrando sesión...')
-      setToastVisible(true)
-
-      // Hacer logout en Supabase primero
+      showToast('Cerrando sesión...', 'info')
       await logoutAuth()
-
-      // Limpiar el store
       logoutStore()
-
-      // Mostrar toast de éxito antes de que AppNavigator cambie
-      setToastMessage('Sesión cerrada correctamente')
-      setToastType('success')
-      setToastVisible(true)
-    } catch (error: any) {
-      // Limpiar el store de todas formas
+    } catch {
       logoutStore()
-
-      setToastMessage('Sesión cerrada')
-      setToastType('success')
-      setToastVisible(true)
     }
   }
 
+  // ── Photo uploads ──────────────────────────────────────────────────────────
   const handleProfilePhotoUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'] as any,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: true, aspect: [1, 1], quality: 0.8,
       })
-
       if (!result.canceled && result.assets[0] && user?.id) {
         setUploadingPhoto(true)
-        const photoUrl = await uploadProfilePhoto(user.id, result.assets[0].uri)
-        
-        // Refresh profile
+        await uploadProfilePhoto(user.id, result.assets[0].uri)
         await fetchProfile(user.id)
-        
-        setToastMessage('Foto de perfil actualizada')
-        setToastType('success')
-        setToastVisible(true)
+        showToast('Foto de perfil actualizada')
       }
     } catch (error: any) {
-      console.error('Error uploading photo:', error)
-      setToastMessage(error.message || 'Error al subir la foto')
-      setToastType('error')
-      setToastVisible(true)
+      showToast(error.message || 'Error al subir la foto', 'error')
     } finally {
       setUploadingPhoto(false)
     }
@@ -172,951 +124,607 @@ export default function ProfileScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'] as any,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        allowsEditing: true, aspect: [4, 3], quality: 0.8,
       })
-
       if (!result.canceled && result.assets[0] && user?.id) {
         setUploadingVehiclePhoto(true)
-        try {
-          const photoUrl = await uploadVehiclePhoto(user.id, null, result.assets[0].uri)
-          console.log('Received vehicle photo URL:', photoUrl)
-          // ✅ Recargar profile para obtener vehicle_photo_url actualizada
-          await fetchProfile(user.id)
-
-          setToastMessage('Foto del vehículo actualizada')
-          setToastType('success')
-          setToastVisible(true)
-        } finally {
-          setUploadingVehiclePhoto(false)
-        }
+        await uploadVehiclePhoto(user.id, null, result.assets[0].uri)
+        await fetchProfile(user.id)
+        showToast('Foto del vehículo actualizada')
       }
     } catch (error: any) {
-      console.error('Error uploading vehicle photo:', error)
-      setToastMessage(error.message || 'Error al subir la foto')
-      setToastType('error')
-      setToastVisible(true)
+      showToast(error.message || 'Error al subir la foto', 'error')
     } finally {
       setUploadingVehiclePhoto(false)
     }
   }
 
-  const showPhotoOptions = () => {
-    Alert.alert(
-      'Foto de Perfil',
-      '¿Qué deseas hacer?',
-      [
-        {
-          text: 'Cambiar foto',
-          onPress: handleProfilePhotoUpload,
-        },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]
-    )
-  }
+  const showPhotoOptions = () =>
+    Alert.alert('Foto de Perfil', '¿Qué deseas hacer?', [
+      { text: 'Cambiar foto', onPress: handleProfilePhotoUpload },
+      { text: 'Cancelar', style: 'cancel' },
+    ])
 
-  const showVehiclePhotoOptions = () => {
-    Alert.alert(
-      'Foto del Vehículo',
-      '¿Qué deseas hacer?',
-      [
-        {
-          text: 'Cargar foto',
-          onPress: handleVehiclePhotoUpload,
-        },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]
-    )
-  }
+  const showVehiclePhotoOptions = () =>
+    Alert.alert('Foto del Vehículo', '¿Qué deseas hacer?', [
+      { text: 'Cargar foto', onPress: handleVehiclePhotoUpload },
+      { text: 'Cancelar', style: 'cancel' },
+    ])
 
-  return (
-    <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Mi Perfil</Text>
-        <TouchableOpacity 
-          style={styles.settingsBtn}
-          onPress={() => navigation.navigate('Settings' as never)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="settings-outline" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-      </View>
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const avatarUri  = user?.avatar_url || profile?.avatar_url
+  const totalTrips = isDriver ? (profile?.total_trips ?? 0) : (passengerStats?.totalTrips ?? 0)
+  const rating     = profile?.rating?.toFixed(1) ?? '0.0'
 
-      <View style={styles.headerContent}>
-        <View style={styles.profileCard}>
-          <TouchableOpacity 
-            style={styles.avatarContainer}
-            onPress={showPhotoOptions}
-            disabled={uploadingPhoto}
-          >
-            {uploadingPhoto ? (
-              <ActivityIndicator size="large" color={COLORS.primary} />
-            ) : (user?.avatar_url || profile?.avatar_url) ? (
-              <>
-                <Image 
-                  source={{ uri: user?.avatar_url || profile?.avatar_url }}
-                  style={styles.avatarImage}
-                />
-                <View style={styles.avatarEditBadge}>
-                  <Ionicons name="camera" size={16} color={COLORS.textInverse} />
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(user?.name || 'U').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.avatarEditBadge}>
-                  <Ionicons name="camera" size={16} color={COLORS.textInverse} />
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name || 'Usuario'}</Text>
-            <Text style={styles.profileEmail}>{user?.email || ''}</Text>
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={16} color={COLORS.accent} />
-              <Text style={styles.ratingText}>{profile?.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.ratingLabel}>({!isDriver ? passengerStats?.totalTrips || 0 : profile?.total_trips || 0} viajes)</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.modeSelectorContainer}>
-          <Text style={styles.modeSelectorLabel}>Mi Rol</Text>
-          <View style={styles.modeSelector}>
-            <TouchableOpacity
-              style={[styles.modeBtn, !isDriver ? styles.modeBtnActive : styles.modeBtnInactive]}
-              onPress={() => handleRoleSwitch('passenger')}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={!isDriver ? 'person' : 'person-outline'}
-                size={22}
-                color={!isDriver ? COLORS.textInverse : COLORS.textSecondary}
-              />
-              <Text style={[styles.modeBtnText, !isDriver && styles.modeBtnTextActive]}>
-                Pasajero
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modeBtn, isDriver ? styles.modeBtnActive : styles.modeBtnInactive]}
-              onPress={() => handleRoleSwitch('driver')}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isDriver ? 'car' : 'car-outline'}
-                size={22}
-                color={isDriver ? COLORS.textInverse : COLORS.textSecondary}
-              />
-              <Text style={[styles.modeBtnText, isDriver && styles.modeBtnTextActive]}>
-                Conductor
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
+  // ── Avatar renderer ────────────────────────────────────────────────────────
+  const renderAvatar = () => (
+    <TouchableOpacity style={styles.avatarWrap} onPress={showPhotoOptions} disabled={uploadingPhoto} activeOpacity={0.85}>
+      {uploadingPhoto ? (
+        <View style={styles.avatarPlaceholder}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
-      ) : !isDriver ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mi Actividad</Text>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Ionicons name="car-outline" size={24} color={COLORS.primary} style={{ marginBottom: SPACING.sm }} />
-              <Text style={styles.statValue}>{passengerStats?.totalTrips || 0}</Text>
-              <Text style={styles.statLabel}>Viajes</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="cash-outline" size={24} color={COLORS.primary} style={{ marginBottom: SPACING.sm }} />
-              <Text style={styles.statValue}>${(passengerStats?.totalSpent || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</Text>
-              <Text style={styles.statLabel}>Gastado</Text>
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Pasajero</Text>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast] as any as any}
-              onPress={() => navigation.navigate('SavedAddresses')}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="location-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Mis direcciones</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={() => navigation.navigate('PaymentMethods' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="card-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Métodos de pago</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={() => navigation.navigate('Notifications' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="notifications-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Notificaciones</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={() => navigation.navigate('Security' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Seguridad</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.sectionTitle}>Mis Viajes</Text>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={[styles.menuItem]}
-              onPress={() => navigation.navigate('ActiveTrips' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="navigate-circle-outline" size={20} color={COLORS.success} />
-              </View>
-              <Text style={styles.menuText}>Viajes Activos</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-            <View style={styles.menuDivider} />
-            <TouchableOpacity 
-              style={[styles.menuItem]}
-              onPress={() => navigation.navigate('TripHistory' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Historial de Viajes</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-            <View style={styles.menuDivider} />
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={() => navigation.navigate('Reviews' as never)}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="star-outline" size={20} color={COLORS.warning} />
-              </View>
-              <Text style={styles.menuText}>Reseñas y Ratings</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.driverCta}
-            onPress={() => handleRoleSwitch('driver')}
-          >
-            <View style={styles.driverCtaContent}>
-              <View style={styles.driverCtaIcon}>
-                <Ionicons name="car-outline" size={24} color={COLORS.primary} />
-              </View>
-              <View style={styles.driverCtaText}>
-                <Text style={styles.driverCtaTitle}>Conviértete en conductor</Text>
-                <Text style={styles.driverCtaSubtitle}>Empieza a ganar dinero ahora</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
+      ) : avatarUri ? (
+        <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
       ) : (
+        <View style={styles.avatarPlaceholder}>
+          <Text style={styles.avatarInitial}>{(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
+      <View style={styles.cameraBadge}>
+        <Ionicons name="camera" size={14} color="#fff" />
+      </View>
+    </TouchableOpacity>
+  )
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+        {/* ══ HERO GRADIENT HEADER ════════════════════════════════════════ */}
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroBg}
+        >
+          {/* Top row */}
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTopSpacer} />
+            <Text style={styles.heroScreenTitle}>Mi Perfil</Text>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => navigation.navigate('Settings' as never)}
+            >
+              <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.9)" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Avatar + info */}
+          <View style={styles.heroBody}>
+            {renderAvatar()}
+            <Text style={styles.heroName}>{user?.name || 'Usuario'}</Text>
+            <Text style={styles.heroEmail}>{user?.email || ''}</Text>
+            <View style={styles.heroRatingRow}>
+              <Ionicons name="star" size={14} color="#FBBF24" />
+              <Text style={styles.heroRating}>{rating}</Text>
+              <Text style={styles.heroRatingDot}>·</Text>
+              <Text style={styles.heroTrips}>{totalTrips} viajes</Text>
+            </View>
+          </View>
+
+          {/* Curved white bottom */}
+          <View style={styles.heroCurve} />
+        </LinearGradient>
+
+        {/* ══ ROLE SELECTOR ═══════════════════════════════════════════════ */}
         <View style={styles.section}>
-          <TouchableOpacity 
-            style={styles.vehiclePhotoContainer}
-            onPress={showVehiclePhotoOptions}
-            disabled={uploadingVehiclePhoto}
-            activeOpacity={0.8}
-          >
-            {uploadingVehiclePhoto ? (
-              <View style={styles.vehiclePhotoLoading}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.sectionLabel}>ROL ACTUAL</Text>
+          <View style={styles.roleToggle}>
+            <TouchableOpacity
+              style={[styles.roleBtn, !isDriver && styles.roleBtnActive]}
+              onPress={() => handleRoleSwitch('passenger')}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={!isDriver ? 'person' : 'person-outline'} size={18} color={!isDriver ? '#fff' : COLORS.textSecondary} />
+              <Text style={[styles.roleBtnText, !isDriver && styles.roleBtnTextActive]}>Pasajero</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roleBtn, isDriver && styles.roleBtnActive]}
+              onPress={() => handleRoleSwitch('driver')}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={isDriver ? 'car' : 'car-outline'} size={18} color={isDriver ? '#fff' : COLORS.textSecondary} />
+              <Text style={[styles.roleBtnText, isDriver && styles.roleBtnTextActive]}>Conductor</Text>
+            </TouchableOpacity>
+            {isLoading && <ActivityIndicator size="small" color={COLORS.primary} style={StyleSheet.absoluteFillObject} />}
+          </View>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : !isDriver ? (
+          <>
+            {/* ── STATS ────────────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>MI ACTIVIDAD</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{passengerStats?.totalTrips ?? 0}</Text>
+                  <Text style={styles.statLabel}>Viajes</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>
+                    ${(passengerStats?.totalSpent ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+                  </Text>
+                  <Text style={styles.statLabel}>Gastado</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{rating}</Text>
+                  <Text style={styles.statLabel}>Rating</Text>
+                </View>
               </View>
-            ) : profile?.vehicle_photo_url ? (
-              <>
-                <Image 
-                  source={{ uri: profile.vehicle_photo_url }}
-                  style={styles.vehiclePhotoImage}
-                  onError={(error) => {
-                    console.error('Vehicle photo load error:', error)
-                    setVehiclePhotoError(true)
-                  }}
-                  onLoad={() => {
-                    console.log('Vehicle photo loaded:', profile.vehicle_photo_url)
-                    setVehiclePhotoError(false)
-                  }}
-                />
-                {vehiclePhotoError && (
-                  <View style={styles.vehiclePhotoError}>
-                    <Ionicons name="warning" size={32} color={COLORS.error} />
-                    <Text style={styles.vehiclePhotoErrorText}>No se pudo cargar</Text>
+            </View>
+
+            {/* ── CUENTA ───────────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>CUENTA</Text>
+              <View style={styles.menuCard}>
+                <MenuItem icon="location-outline" label="Mis direcciones"   onPress={() => navigation.navigate('SavedAddresses' as never)} />
+                <MenuDivider />
+                <MenuItem icon="card-outline"     label="Métodos de pago"  onPress={() => navigation.navigate('PaymentMethods' as never)} />
+                <MenuDivider />
+                <MenuItem icon="notifications-outline" label="Notificaciones" onPress={() => navigation.navigate('Notifications' as never)} />
+                <MenuDivider />
+                <MenuItem icon="shield-checkmark-outline" label="Seguridad" onPress={() => navigation.navigate('Security' as never)} last />
+              </View>
+            </View>
+
+            {/* ── MIS VIAJES ───────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>MIS VIAJES</Text>
+              <View style={styles.menuCard}>
+                <MenuItem icon="navigate-circle-outline" iconColor={COLORS.success} label="Viajes Activos"     onPress={() => navigation.navigate('ActiveTrips' as never)} />
+                <MenuDivider />
+                <MenuItem icon="time-outline"            label="Historial de Viajes" onPress={() => navigation.navigate('TripHistory' as never)} />
+                <MenuDivider />
+                <MenuItem icon="star-outline"            iconColor={COLORS.warning}  label="Reseñas y Ratings" onPress={() => navigation.navigate('Reviews' as never)} last />
+              </View>
+            </View>
+
+            {/* ── DRIVER CTA ───────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.driverCta} onPress={() => handleRoleSwitch('driver')} activeOpacity={0.88}>
+                <LinearGradient
+                  colors={[`${COLORS.primary}12`, `${COLORS.primary}06`]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={styles.driverCtaInner}
+                >
+                  <View style={styles.driverCtaIcon}>
+                    <Ionicons name="car" size={24} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.driverCtaText}>
+                    <Text style={styles.driverCtaTitle}>Conviértete en conductor</Text>
+                    <Text style={styles.driverCtaSub}>Empieza a ganar dinero ahora</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* ── VEHICLE PHOTO ────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>MI VEHÍCULO</Text>
+              <TouchableOpacity
+                style={styles.vehiclePhotoContainer}
+                onPress={showVehiclePhotoOptions}
+                disabled={uploadingVehiclePhoto}
+                activeOpacity={0.85}
+              >
+                {uploadingVehiclePhoto ? (
+                  <View style={styles.vehiclePhotoEmpty}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                  </View>
+                ) : profile?.vehicle_photo_url && !vehiclePhotoError ? (
+                  <>
+                    <Image
+                      source={{ uri: profile.vehicle_photo_url }}
+                      style={styles.vehiclePhotoImg}
+                      onError={() => setVehiclePhotoError(true)}
+                      onLoad={() => setVehiclePhotoError(false)}
+                    />
+                    <View style={styles.vehiclePhotoBadge}>
+                      <Ionicons name="camera" size={22} color="#fff" />
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.vehiclePhotoEmpty}>
+                    <Ionicons name="car" size={48} color={COLORS.primary} />
+                    <Text style={styles.vehiclePhotoEmptyText}>Agregar foto del vehículo</Text>
+                    <Text style={styles.vehiclePhotoEmptySub}>Toca para seleccionar</Text>
                   </View>
                 )}
-                <View style={styles.vehiclePhotoBadge}>
-                  <Ionicons name="camera" size={24} color={COLORS.textInverse} />
-                </View>
-              </>
-            ) : (
-              <View style={styles.vehiclePhotoEmpty}>
-                <Ionicons name="car" size={56} color={COLORS.primary} />
-                <Text style={styles.vehiclePhotoEmptyText}>Cargar foto del vehículo</Text>
-                <Text style={styles.vehiclePhotoEmptySubtext}>Toca para seleccionar</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
 
-          <Text style={styles.sectionTitle}>Conductor</Text>
-
-          <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('VehicleInfo' as never)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="car-outline" size={20} color={COLORS.primary} />
+            {/* ── CONDUCTOR MENU ───────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>GESTIÓN</Text>
+              <View style={styles.menuCard}>
+                <MenuItem icon="car-outline"           label="Mi vehículo"    onPress={() => navigation.navigate('VehicleInfo' as never)} />
+                <MenuDivider />
+                <MenuItem icon="document-text-outline" label="Documentos"     onPress={() => navigation.navigate('DriverDocuments' as never)} />
+                <MenuDivider />
+                <MenuItem icon="wallet-outline"        label="Ganancias"      onPress={() => navigation.navigate('Earnings' as never)} />
+                <MenuDivider />
+                <MenuItem icon="stats-chart-outline"   label="Estadísticas"   onPress={() => navigation.navigate('Stats' as never)} last />
               </View>
-              <Text style={styles.menuText}>Mi vehículo</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('DriverDocuments' as never)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Documentos</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
+            {/* ── ACTIONS ──────────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => navigation.navigate('DriverRegister' as never)}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                <Text style={styles.primaryBtnText}>Crear Nueva Ruta</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('Earnings' as never)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="wallet-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Ganancias</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => navigation.navigate('DriverPanel' as never)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
+                <Text style={styles.secondaryBtnText}>Panel del Conductor</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={() => navigation.navigate('Stats' as never)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name="stats-chart-outline" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.menuText}>Estadísticas</Text>
-              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
+        {/* ── ADMIN ───────────────────────────────────────────────────────── */}
+        {profile?.role === 'support' && (
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('AdminDocuments' as never)} activeOpacity={0.8}>
+              <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.adminBtnText}>Verificar Documentos</Text>
             </TouchableOpacity>
           </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.registerBtn}
-            onPress={() => navigation.navigate('DriverRegister' as never)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add-circle-outline" size={22} color={COLORS.textInverse} />
-            <Text style={styles.registerBtnText}>Crear Nueva Ruta</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.panelBtn}
-            onPress={() => navigation.navigate('DriverPanel' as never)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="speedometer" size={22} color={COLORS.primary} />
-            <Text style={styles.panelBtnText}>Panel del Conductor</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+        {/* ── LOGOUT ──────────────────────────────────────────────────────── */}
+        <View style={[styles.section, { marginBottom: SPACING.xxxl }]}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+            <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
+            <Text style={styles.logoutText}>Cerrar Sesión</Text>
           </TouchableOpacity>
         </View>
-      )}
 
-      {profile?.role === 'support' && (
-        <TouchableOpacity
-          style={styles.adminBtn}
-          onPress={() => navigation.navigate('AdminDocuments' as never)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.adminBtnText}>Verificar Documentos</Text>
-        </TouchableOpacity>
-      )}
+      </ScrollView>
 
-      <TouchableOpacity
-        style={styles.logoutBtn}
-        onPress={handleLogout}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-        <Text style={styles.logoutText}>Cerrar Sesión</Text>
-      </TouchableOpacity>
-
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        type="success"
-        onHide={() => setToastVisible(false)}
-      />
-    </ScrollView>
+      <Toast visible={toastVisible} message={toastMessage} type={toastType} onHide={() => setToastVisible(false)} />
     </SafeAreaView>
   )
 }
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+interface MenuItemProps {
+  icon: string
+  label: string
+  onPress: () => void
+  iconColor?: string
+  last?: boolean
+}
+const MenuItem = ({ icon, label, onPress, iconColor, last }: MenuItemProps) => (
+  <TouchableOpacity style={[styles.menuItem, last && styles.menuItemLast]} onPress={onPress} activeOpacity={0.7}>
+    <View style={[styles.menuIcon, iconColor && { backgroundColor: `${iconColor}15` }]}>
+      <Ionicons name={icon as any} size={19} color={iconColor ?? COLORS.primary} />
+    </View>
+    <Text style={styles.menuText}>{label}</Text>
+    <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+  </TouchableOpacity>
+)
+const MenuDivider = () => <View style={styles.menuDivider} />
+
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  safe: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { paddingBottom: 40 },
+
+  // ── Hero ────────────────────────────────────────────────────────────────────
+  heroBg: {
+    paddingTop: SPACING.md,
+    paddingBottom: 0,
   },
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    paddingBottom: 100,
-  },
-  
-  // Header
-  header: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
+  heroTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
   },
-  title: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textPrimary,
+  heroTopSpacer: { width: 44 },
+  heroScreenTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.2,
   },
   settingsBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    width: 44, height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    ...SHADOWS.md,
   },
-  
-  // Profile Card
-  headerContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-  },
-  profileCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    flexDirection: 'row',
+  heroBody: {
     alignItems: 'center',
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-    gap: SPACING.lg,
-    ...SHADOWS.md,
+    paddingBottom: SPACING.xl,
+    paddingTop: SPACING.sm,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.lg,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.lg,
+  avatarWrap: {
+    width: 90, height: 90,
+    borderRadius: 45,
+    marginBottom: SPACING.md,
     position: 'relative',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.6)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: RADIUS.full,
+  avatarImg: {
+    width: 84, height: 84,
+    borderRadius: 42,
   },
-  avatarEditBadge: {
+  avatarPlaceholder: {
+    width: 84, height: 84,
+    borderRadius: 42,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cameraBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primary,
+    bottom: 0, right: 0,
+    width: 26, height: 26,
+    borderRadius: 13,
+    backgroundColor: COLORS.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: COLORS.surface,
+    borderColor: '#fff',
   },
-  avatarText: {
-    fontSize: 32,
+  heroName: {
+    fontSize: 20,
     fontWeight: '700',
-    color: COLORS.textInverse,
+    color: '#fff',
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    ...TYPOGRAPHY.h4,
-    color: COLORS.textPrimary,
-  },
-  profileEmail: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  ratingText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-  },
-  ratingLabel: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-  },
-  
-  // Mode Selector
-  modeSelectorContainer: {
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-    gap: SPACING.md,
-  },
-  modeSelectorLabel: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textSecondary,
+  heroEmail: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
     marginBottom: SPACING.sm,
   },
-  modeSelector: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-  },
-  modeBtn: {
-    flex: 1,
+  heroRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    gap: SPACING.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    ...SHADOWS.sm,
+    gap: 5,
   },
-  modeBtnInactive: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.borderLight,
+  heroRating: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  heroRatingDot: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
+  heroTrips: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
+  heroCurve: {
+    height: 28,
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
-  modeBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    ...SHADOWS.md,
-  },
-  modeBtnText: {
-    ...TYPOGRAPHY.bodyMedium,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  modeBtnTextActive: {
-    color: COLORS.textInverse,
-  },
-  
-  // Loading
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: SPACING.xxxl,
-  },
-  
-  // Sections
+
+  // ── Section ──────────────────────────────────────────────────────────────────
   section: {
     paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textSecondary,
     marginBottom: SPACING.lg,
   },
-  
-  // Stats Grid
-  statsGrid: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.xl,
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    letterSpacing: 1,
+    marginBottom: SPACING.sm,
   },
-  statCard: {
-    flex: 1,
+
+  // ── Role Toggle ───────────────────────────────────────────────────────────────
+  roleToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    padding: 4,
+    gap: 4,
+  },
+  roleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: SPACING.sm, borderRadius: RADIUS.sm - 2,
+    gap: SPACING.sm,
+  },
+  roleBtnActive: {
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  roleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  roleBtnTextActive: { color: '#fff' },
+
+  // ── Stats ─────────────────────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    ...SHADOWS.sm,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statCard: {
+    flex: 1, alignItems: 'center',
+    paddingVertical: SPACING.lg,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: COLORS.borderLight,
+    marginVertical: SPACING.md,
   },
   statValue: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.primary,
+    fontSize: 20, fontWeight: '800',
+    color: COLORS.primary, letterSpacing: -0.5,
+    marginBottom: 4,
   },
   statLabel: {
-    ...TYPOGRAPHY.labelMedium,
+    fontSize: 12, fontWeight: '500',
     color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
   },
-  
-  // Menu Card
+
+  // ── Loading ───────────────────────────────────────────────────────────────────
+  loadingBox: {
+    paddingVertical: SPACING.xxxl,
+    alignItems: 'center',
+  },
+
+  // ── Menu Card ─────────────────────────────────────────────────────────────────
   menuCard: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    marginBottom: SPACING.md,
-    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.lg,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14,
     paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    gap: SPACING.lg,
+    gap: SPACING.md,
   },
-  menuItemLast: {
-    borderBottomWidth: 0,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-  },
+  menuItemLast: { borderBottomWidth: 0 },
+  menuDivider: { height: 1, backgroundColor: COLORS.borderLight, marginLeft: 68 },
   menuIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 38, height: 38,
+    borderRadius: RADIUS.sm,
+    backgroundColor: `${COLORS.primary}12`,
+    justifyContent: 'center', alignItems: 'center',
   },
   menuText: {
-    flex: 1,
-    ...TYPOGRAPHY.body,
+    flex: 1, fontSize: 15, fontWeight: '500',
     color: COLORS.textPrimary,
-    fontWeight: '500',
   },
-  menuChevron: {
-    color: COLORS.textTertiary,
-  },
-  
-  // CTA
+
+  // ── Driver CTA ────────────────────────────────────────────────────────────────
   driverCta: {
-    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xl,
-    borderWidth: 2,
-    borderColor: COLORS.primary + '20',
-    ...SHADOWS.sm,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}25`,
   },
-  driverCtaContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
-    flex: 1,
+  driverCtaInner: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: SPACING.lg, gap: SPACING.md,
   },
   driverCtaIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 48, height: 48, borderRadius: RADIUS.md,
+    backgroundColor: `${COLORS.primary}18`,
+    justifyContent: 'center', alignItems: 'center',
   },
-  driverCtaText: {
-    gap: SPACING.xs,
-    flex: 1,
-  },
-  driverCtaTitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-  },
-  driverCtaSubtitle: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-  },
-  
-  // Vehicle Photo Container
+  driverCtaText: { flex: 1, gap: 3 },
+  driverCtaTitle: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
+  driverCtaSub:   { fontSize: 13, color: COLORS.textSecondary },
+
+  // ── Vehicle Photo ─────────────────────────────────────────────────────────────
   vehiclePhotoContainer: {
-    width: '100%',
-    height: 280,
-    borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.surface,
+    height: 200, borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surfaceAlt,
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xl,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOWS.md,
-    position: 'relative',
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12, elevation: 3,
   },
-  vehiclePhotoImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  vehiclePhotoLoading: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceAlt,
-  },
+  vehiclePhotoImg: { width: '100%', height: '100%', resizeMode: 'cover' },
   vehiclePhotoEmpty: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceAlt,
-    gap: SPACING.md,
+    flex: 1, justifyContent: 'center', alignItems: 'center', gap: SPACING.sm,
   },
-  vehiclePhotoEmptyText: {
-    ...TYPOGRAPHY.h4,
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  vehiclePhotoEmptySubtext: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  vehiclePhotoError: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceAlt,
-    gap: SPACING.md,
-  },
-  vehiclePhotoErrorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.error,
-  },
+  vehiclePhotoEmptyText: { fontSize: 15, fontWeight: '600', color: COLORS.textSecondary },
+  vehiclePhotoEmptySub:  { fontSize: 13, color: COLORS.textTertiary },
   vehiclePhotoBadge: {
-    position: 'absolute',
-    bottom: SPACING.lg,
-    right: SPACING.lg,
-    width: 48,
-    height: 48,
-    borderRadius: RADIUS.full,
+    position: 'absolute', bottom: SPACING.md, right: SPACING.md,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.surface,
-    ...SHADOWS.lg,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4,
   },
-  
-  // Old Vehicle Card (backup)
-  vehicleCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    gap: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOWS.sm,
+
+  // ── Buttons ───────────────────────────────────────────────────────────────────
+  primaryBtn: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 52,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 7,
   },
-  vehicleImage: {
-    width: 72,
-    height: 72,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+  primaryBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  secondaryBtn: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md, height: 52,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, gap: SPACING.md,
+    borderWidth: 1, borderColor: `${COLORS.primary}30`,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  vehicleImageContent: {
-    width: 72,
-    height: 72,
-    borderRadius: RADIUS.md,
-  },
-  vehicleImageText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-  },
-  vehicleEditBadge: {
-    position: 'absolute',
-    bottom: -8,
-    right: -8,
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-    ...SHADOWS.md,
-  },
-  vehicleInfo: {
-    flex: 1,
-  },
-  vehicleName: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-  },
-  vehicleSubtitle: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-  },
-  
-  // Badge
-  pendingBadge: {
-    backgroundColor: COLORS.warning + '15',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.warning + '30',
-  },
-  pendingText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: COLORS.warning,
-  },
-  
-  // Buttons
-  registerBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    height: 56,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-    ...SHADOWS.md,
-  },
-  registerBtnText: {
-    color: COLORS.textInverse,
-    ...TYPOGRAPHY.bodyMedium,
-    fontWeight: '600',
-  },
-  panelBtn: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    gap: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-    ...SHADOWS.sm,
-  },
-  panelBtnText: {
-    flex: 1,
-    color: COLORS.primary,
-    ...TYPOGRAPHY.bodyMedium,
-    fontWeight: '600',
-  },
+  secondaryBtnText: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.primary },
 
   adminBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.md,
-    paddingVertical: SPACING.lg,
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.md, paddingVertical: SPACING.md,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary + '15',
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
+    backgroundColor: `${COLORS.primary}12`,
+    borderWidth: 1, borderColor: `${COLORS.primary}30`,
   },
-  adminBtnText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
+  adminBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
 
   logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.md,
-    paddingVertical: SPACING.lg,
-    marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.sm, paddingVertical: SPACING.md,
     borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.error + '30',
+    borderWidth: 1, borderColor: `${COLORS.error}25`,
+    backgroundColor: `${COLORS.error}06`,
   },
-  logoutText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.error,
-    fontWeight: '600',
-  },
+  logoutText: { fontSize: 14, fontWeight: '600', color: COLORS.error },
 })

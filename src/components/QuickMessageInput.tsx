@@ -43,7 +43,7 @@ export const QuickMessageInput = React.memo(
             disabled && styles.inputDisabled,
           ]}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.text.disabled}
+          placeholderTextColor={COLORS.textTertiary}
           value={message}
           onChangeText={setMessage}
           multiline
@@ -62,9 +62,9 @@ export const QuickMessageInput = React.memo(
           activeOpacity={0.7}
         >
           {sending ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Ionicons name="send" size={18} color={canSend ? COLORS.white : COLORS.text.disabled} />
+            <Ionicons name="send" size={18} color={canSend ? '#FFFFFF' : COLORS.textTertiary} />
           )}
         </TouchableOpacity>
       </View>
@@ -81,15 +81,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     gap: SPACING.sm,
-    backgroundColor: COLORS.background.primary,
+    backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   input: {
     flex: 1,
     ...TYPOGRAPHY.body,
-    color: COLORS.text.primary,
-    backgroundColor: COLORS.background.secondary,
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   inputDisabled: {
-    backgroundColor: COLORS.background.disabled,
-    color: COLORS.text.disabled,
+    backgroundColor: COLORS.borderLight,
+    color: COLORS.textTertiary,
   },
   sendButton: {
     width: 40,
@@ -111,6 +111,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: COLORS.background.disabled,
+    backgroundColor: COLORS.borderLight,
   },
 })
